@@ -1,12 +1,15 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type { AuthUser } from '../types/resume';
 
 interface AuthState {
   user: AuthUser | null;
+  accessToken: string | null;
   isAuthenticated: boolean;
 
-  login: (user: AuthUser) => void;
+  login: (user: AuthUser, accessToken?: string | null) => void;
+  setSession: (accessToken: string, user?: AuthUser | null) => void;
+  setAccessToken: (accessToken: string) => void;
   logout: () => void;
 }
 
@@ -18,21 +21,30 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
+      accessToken: null,
       isAuthenticated: false,
 
-      login: (user) => set({ user, isAuthenticated: true }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      login: (user, accessToken = null) =>
+        set({ user, accessToken, isAuthenticated: true }),
+      setSession: (accessToken, user = null) =>
+        set((state) => ({
+          accessToken,
+          user: user ?? state.user,
+          isAuthenticated: true,
+        })),
+      setAccessToken: (accessToken) =>
+        set({ accessToken, isAuthenticated: true }),
+      logout: () =>
+        set({ user: null, accessToken: null, isAuthenticated: false }),
     }),
     {
       name: 'gitresume-auth',
-      storage: {
-        getItem: (key) => {
-          const val = sessionStorage.getItem(key);
-          return val ? JSON.parse(val) : null;
-        },
-        setItem: (key, val) => sessionStorage.setItem(key, JSON.stringify(val)),
-        removeItem: (key) => sessionStorage.removeItem(key),
-      },
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
     },
   ),
 );

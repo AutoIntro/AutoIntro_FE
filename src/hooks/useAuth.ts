@@ -1,40 +1,37 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuthStore } from '../stores/authStore';
-import { MOCK_MODE } from '../constants/constants';
+import { MOCK_MODE, ROUTES } from '../constants/constants';
 
 /**
  * 앱 최초 마운트 시 세션 복원 훅
- * - MOCK_MODE: 곧바로 로그인 처리
- * - 실서비스: GET /auth/me 로 세션 쿠키 검증
+ * - MOCK_MODE: 랜딩에서 버튼 클릭 시 로그인 처리
+ * - 실서비스: refresh token cookie로 access token 재발급
  */
 export function useAuthInit() {
   const [initializing, setInitializing] = useState(true);
-  const login = useAuthStore((s) => s.login);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const setSession = useAuthStore((s) => s.setSession);
+  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
-    // 이미 로그인 상태면 재확인 생략
-    if (isAuthenticated) {
-      setInitializing(false);
-      return;
-    }
-
     if (MOCK_MODE) {
-      // Mock: 비로그인 상태로 시작 (랜딩에서 버튼 클릭 시 로그인)
       setInitializing(false);
       return;
     }
 
-    // 실서비스: 서버에서 세션 확인
+    if (window.location.pathname === ROUTES.OAUTH_CALLBACK) {
+      setInitializing(false);
+      return;
+    }
+
     apiClient
-      .getMe()
-      .then(({ data: user }) => login(user))
+      .reissueToken()
+      .then(({ data: accessToken }) => setSession(accessToken))
       .catch(() => {
-        /* 비로그인 상태 — 정상 케이스 */
+        logout();
       })
       .finally(() => setInitializing(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [logout, setSession]);
 
   return { initializing };
 }

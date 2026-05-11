@@ -13,7 +13,7 @@ export default function Header() {
   const handleLogin = () => {
     if (MOCK_MODE) {
       apiClient.getMe().then(({ data: user }) => {
-        login(user);
+        login(user, 'mock-access-token');
         navigate(ROUTES.REPOSITORIES);
       });
       return;
@@ -48,7 +48,7 @@ export default function Header() {
               {user?.avatarUrl && (
                 <img src={user.avatarUrl} alt="" className={styles.avatar} />
               )}
-              <span className={styles.userName}>{user?.login}</span>
+              <span className={styles.userName}>{user?.login ?? 'GitHub 사용자'}</span>
               <button onClick={handleLogout} className={styles.logoutBtn}>
                 로그아웃
               </button>
