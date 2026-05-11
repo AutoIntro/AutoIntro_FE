@@ -1,0 +1,289 @@
+.page {
+  padding-bottom: 20px;
+}
+
+.center {
+  min-height: 480px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.errorTitle {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.errorSub {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+
+.steps {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 80px;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepActive,
+.stepDone,
+.stepIdle {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.stepActive,
+.stepDone {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+.stepIdle {
+  background: #e5e9f0;
+  color: var(--text-muted);
+}
+
+.stepIdleText {
+  color: var(--text-muted);
+}
+
+.stepLine {
+  width: 52px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.profileCard {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 114px;
+  padding: 24px !important;
+  margin-bottom: 30px;
+  box-shadow: var(--shadow-md);
+}
+
+.profileMark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--accent);
+  color: var(--text-inverse);
+  flex-shrink: 0;
+}
+
+.profileMark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profileName {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.profileUrl {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.pageHeader {
+  margin-bottom: 30px;
+}
+
+.pageTitle {
+  font-size: 34px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.25;
+  letter-spacing: 0;
+  margin: 0 0 8px;
+}
+
+.pageDesc {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.repoList {
+  display: grid;
+  gap: 16px;
+}
+
+.repoCard {
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px !important;
+  outline: none;
+}
+
+.repoCard:focus-visible {
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.16), var(--shadow-sm);
+}
+
+.disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.repoTop {
+  display: grid;
+  gap: 12px;
+}
+
+.repoNameRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+}
+
+.repoName {
+  font-size: 18px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repoDesc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.repoFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.repoMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.lang,
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.langDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.selectCircle {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  color: var(--text-inverse);
+  flex-shrink: 0;
+}
+
+.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.bottomBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.bottomInner {
+  max-width: 1028px;
+  min-height: 96px;
+  margin: 0 auto;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.selectedCount {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.selectedCount strong {
+  color: var(--accent-strong);
+}
+
+@media (max-width: 640px) {
+  .steps {
+    margin-bottom: 42px;
+  }
+
+  .profileCard {
+    align-items: flex-start;
+  }
+
+  .repoFooter,
+  .bottomInner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bottomInner {
+    min-height: 112px;
+  }
+
+  .bottomInner button {
+    width: 100%;
+  }
+}

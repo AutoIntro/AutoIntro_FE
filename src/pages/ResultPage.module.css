@@ -1,0 +1,167 @@
+.page {
+  padding-bottom: 20px;
+}
+
+.empty {
+  min-height: 480px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.emptyTitle {
+  font-size: 24px;
+  font-weight: 900;
+  margin: 0;
+}
+
+.emptyDesc {
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin: -38px 0 36px;
+}
+
+.successBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px;
+  margin-bottom: 32px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: #e9f9f0;
+}
+
+.successIcon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  flex-shrink: 0;
+}
+
+.successBanner h1 {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.35;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.successBanner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.contentCard {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.contentHeader {
+  min-height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 26px;
+}
+
+.contentHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.editButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.editButton:hover {
+  color: var(--text-primary);
+  background: var(--surface-muted);
+}
+
+.contentDivider {
+  height: 1px;
+  background: var(--border);
+}
+
+.contentBody {
+  min-height: 430px;
+  padding: 34px 32px 46px;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+.editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 26px 26px;
+}
+
+.footerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 700px) {
+  .toolbar {
+    margin-top: 0;
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .toolbar button,
+  .footerActions button {
+    flex: 1;
+  }
+
+  .successBanner {
+    flex-direction: column;
+  }
+
+  .contentHeader {
+    min-height: auto;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 22px;
+  }
+
+  .contentBody {
+    padding: 26px 22px 36px;
+  }
+
+  .footerActions {
+    flex-direction: column;
+  }
+}
