@@ -29,7 +29,7 @@ export default function RepositorySelectPage() {
   const setSelectedRepositories = useResumeStore((s) => s.setSelectedRepositories);
 
   const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<ApiStatus>('idle');
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function RepositorySelectPage() {
     };
   }, []);
 
-  const toggleRepository = (id: number) => {
+  const toggleRepository = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
 

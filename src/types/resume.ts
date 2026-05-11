@@ -1,9 +1,11 @@
 export interface Repository {
-  id: number;
+  id: string;
   name: string;
   fullName: string;
+  url: string;
   description: string;
   language: string;
+  isPrivate: boolean;
   stars: number;
   updatedAt: string;
 }
@@ -21,7 +23,7 @@ export interface JobInput {
 }
 
 export interface ResumeGenerationRequest {
-  repositoryIds: number[];
+  repositoryIds: string[];
   jobInput: JobInput;
 }
 

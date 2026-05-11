@@ -12,7 +12,7 @@ export default function LandingPage() {
   const handleGithubLogin = () => {
     if (MOCK_MODE) {
       apiClient.getMe().then(({ data: user }) => {
-        login(user);
+        login(user, 'mock-access-token');
         navigate(ROUTES.REPOSITORIES);
       });
       return;
