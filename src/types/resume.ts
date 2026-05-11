@@ -25,6 +25,7 @@ export interface JobInput {
 export interface ResumeGenerationRequest {
   repositoryIds: string[];
   jobInput: JobInput;
+  repositoryMatches?: RepositoryMatch[];
 }
 
 export interface ResumeResult {
@@ -32,6 +33,19 @@ export interface ResumeResult {
   content: string;
   strengths: string[];
   techKeywords: string[];
+}
+
+export interface RepositoryMatch {
+  repositoryId: string;
+  repositoryName: string;
+  repositoryUrl: string;
+  rank: number;
+  score: number;
+  matchedKeywords: string[];
+  jobSignals: string[];
+  repositorySignals: string[];
+  summary: string;
+  improvement: string;
 }
 
 /** 인증 상태 */

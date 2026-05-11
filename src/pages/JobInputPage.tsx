@@ -13,7 +13,8 @@ import Card from '../components/common/Card';
 import { ROUTES } from '../constants/constants';
 import { JOB_POSITION_SUGGESTIONS, type JobPositionSuggestion } from '../constants/jobPositions';
 import { useResumeStore } from '../stores/resumeStore';
-import type { JobInput, Repository } from '../types/resume';
+import type { JobInput, Repository, RepositoryMatch } from '../types/resume';
+import { rankRepositoriesForJob } from '../utils/repositoryMatching';
 import styles from './JobInputPage.module.css';
 
 const INITIAL: JobInput = {
@@ -251,6 +252,7 @@ export default function JobInputPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const setJobInput = useResumeStore((s) => s.setJobInput);
+  const setRepositoryMatches = useResumeStore((s) => s.setRepositoryMatches);
   const selectedRepositories = useResumeStore((s) => s.selectedRepositories);
 
   const [form, setForm] = useState<JobInput>(INITIAL);
@@ -268,6 +270,10 @@ export default function JobInputPage() {
   const positionSuggestions = useMemo(
     () => getPositionSuggestions(form.position),
     [form.position],
+  );
+  const repositoryMatches = useMemo(
+    () => rankRepositoriesForJob(form, selectedRepositories),
+    [form, selectedRepositories],
   );
   const activePositionSuggestionIndex = Math.min(
     activeSuggestionIndex,
@@ -467,6 +473,7 @@ export default function JobInputPage() {
   };
 
   const handleSubmit = () => {
+    setRepositoryMatches(repositoryMatches);
     setJobInput({
       ...form,
       position: form.position.trim(),
@@ -592,7 +599,6 @@ export default function JobInputPage() {
           <div className={styles.analysisGrid}>
             <TextInputField
               label="회사명"
-              badge="AI 이미지 분석"
               name="companyName"
               placeholder="자동 입력 / 수정 가능"
               value={form.companyName}
@@ -601,7 +607,7 @@ export default function JobInputPage() {
 
             <div className={styles.autocomplete}>
               <label htmlFor="position" className={styles.label}>
-                지원 직무 <span className={styles.aiBadge}>AI 이미지 분석</span>
+                지원 직무
               </label>
               <input
                 id="position"
@@ -656,7 +662,7 @@ export default function JobInputPage() {
 
             <div className={styles.wideField}>
               <label htmlFor="responsibilities" className={styles.label}>
-                주요 업무 <span className={styles.aiBadge}>AI 이미지 분석</span>
+                주요 업무
               </label>
               <textarea
                 id="responsibilities"
@@ -670,7 +676,6 @@ export default function JobInputPage() {
 
             <TagEditor
               label="필수 기술"
-              badge="AI 추출"
               values={form.requiredSkills}
               placeholder="예: Java, Spring Boot, MySQL, AWS"
               onChange={(values) => updateTagField('requiredSkills', values)}
@@ -678,7 +683,6 @@ export default function JobInputPage() {
 
             <TagEditor
               label="우대 기술"
-              badge="AI 추출"
               values={form.preferredSkills}
               placeholder="예: Docker, Kubernetes, CI/CD"
               onChange={(values) => updateTagField('preferredSkills', values)}
@@ -686,7 +690,6 @@ export default function JobInputPage() {
 
             <TagEditor
               label="인재상 / 자격요건"
-              badge="AI 추출"
               values={form.traits}
               placeholder="예: 협업 능력, 문제 해결 능력"
               onChange={(values) => updateTagField('traits', values)}
@@ -694,12 +697,15 @@ export default function JobInputPage() {
 
             <TagEditor
               label="핵심 키워드"
-              badge="AI 추출"
               values={form.keywords}
               placeholder="예: 백엔드, API, 클라우드"
               onChange={(values) => updateTagField('keywords', values)}
             />
           </div>
+
+          {hasAnalysisResult && (
+            <RepositoryRankingPanel matches={repositoryMatches} />
+          )}
         </div>
 
         <div className={styles.divider} />
@@ -773,14 +779,12 @@ function SectionHeader({
 
 function TextInputField({
   label,
-  badge,
   name,
   placeholder,
   value,
   onChange,
 }: {
   label: string;
-  badge?: string;
   name: string;
   placeholder: string;
   value: string;
@@ -790,7 +794,6 @@ function TextInputField({
     <div className={styles.field}>
       <label htmlFor={name} className={styles.label}>
         {label}
-        {badge && <span className={styles.aiBadge}>{badge}</span>}
       </label>
       <input
         id={name}
@@ -800,6 +803,58 @@ function TextInputField({
         value={value}
         onChange={onChange}
       />
+    </div>
+  );
+}
+
+function RepositoryRankingPanel({ matches }: { matches: RepositoryMatch[] }) {
+  return (
+    <div className={styles.rankingPanel}>
+      <div className={styles.rankingHeader}>
+        <div>
+          <h3>공고 맞춤 레포 우선순위</h3>
+          <p>선택한 후보 레포를 공고 요구사항 기준으로 자동 정렬했습니다.</p>
+        </div>
+        <span className={styles.rankingMeta}>상위 레포 중심 반영</span>
+      </div>
+
+      <ol className={styles.rankingList}>
+        {matches.map((match) => (
+          <li key={match.repositoryId} className={styles.rankingItem}>
+            <div className={styles.rankBadge}>{match.rank}</div>
+            <div className={styles.rankingContent}>
+              <div className={styles.rankingTitleRow}>
+                <h4>{match.repositoryName}</h4>
+                <span>{match.score}점</span>
+              </div>
+              <p className={styles.rankingSummary}>{match.summary}</p>
+
+              {match.matchedKeywords.length > 0 && (
+                <div className={styles.keywordRow}>
+                  {match.matchedKeywords.slice(0, 5).map((keyword) => (
+                    <span key={keyword}>{keyword}</span>
+                  ))}
+                </div>
+              )}
+
+              <div className={styles.rankingEvidence}>
+                {match.jobSignals.slice(0, 2).map((signal) => (
+                  <p key={signal}>
+                    <strong>공고</strong>
+                    {signal}
+                  </p>
+                ))}
+                {match.repositorySignals.slice(0, 2).map((signal) => (
+                  <p key={signal}>
+                    <strong>GitHub</strong>
+                    {signal}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -852,13 +907,11 @@ function ImageAnalysisStatus({
 
 function TagEditor({
   label,
-  badge,
   values,
   placeholder,
   onChange,
 }: {
   label: string;
-  badge?: string;
   values: string[];
   placeholder: string;
   onChange: (values: string[]) => void;
@@ -895,7 +948,6 @@ function TagEditor({
     <div className={styles.tagField}>
       <label className={styles.label}>
         {label}
-        {badge && <span className={styles.aiBadge}>{badge}</span>}
       </label>
       <div className={styles.tagBox}>
         {values.map((value) => (
@@ -938,7 +990,7 @@ function StepHeader() {
         <span className={styles.stepDone}>
           <CheckIcon />
         </span>
-        <span>레포지토리 선택</span>
+        <span>후보 레포 선택</span>
       </div>
       <span className={styles.stepLine} />
       <div className={styles.step}>

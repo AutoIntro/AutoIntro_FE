@@ -127,6 +127,169 @@
   padding: 0 26px 26px;
 }
 
+.evidenceCard {
+  display: grid;
+  gap: 22px;
+  padding: 26px !important;
+  margin-top: 24px;
+}
+
+.evidenceHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.evidenceHeader h2 {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.evidenceHeader p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.evidenceHeader > span {
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.evidenceGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.evidenceBlock {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.evidenceBlock h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.evidenceBlock p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.evidenceTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evidenceTags span {
+  padding: 6px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.repoEvidenceList {
+  display: grid;
+  gap: 14px;
+}
+
+.repoEvidenceItem {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.repoEvidenceTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.repoEvidenceTop span {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.repoEvidenceTop h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.repoEvidenceTop strong {
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.repoEvidenceSummary,
+.improvementText {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.signalList {
+  display: grid;
+  gap: 6px;
+}
+
+.signalList p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.signalList p::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  display: inline-block;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 2px;
+}
+
 .footerActions {
   display: flex;
   justify-content: flex-end;
@@ -148,6 +311,15 @@
 
   .successBanner {
     flex-direction: column;
+  }
+
+  .evidenceHeader,
+  .repoEvidenceTop {
+    flex-direction: column;
+  }
+
+  .evidenceGrid {
+    grid-template-columns: 1fr;
   }
 
   .contentHeader {

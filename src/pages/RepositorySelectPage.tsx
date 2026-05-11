@@ -116,9 +116,9 @@ export default function RepositorySelectPage() {
       </Card>
 
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>레포지토리 선택</h1>
+        <h1 className={styles.pageTitle}>후보 레포지토리 선택</h1>
         <p className={styles.pageDesc}>
-          자기소개서에 포함할 레포지토리를 선택해주세요. 최대 {MAX_REPOSITORIES}개까지 선택할 수 있습니다.
+          공고 분석 후 자동 정렬할 GitHub 후보 레포를 선택해주세요. 최대 {MAX_REPOSITORIES}개까지 선택할 수 있습니다.
         </p>
       </div>
 
@@ -202,7 +202,7 @@ function StepHeader({ current }: { current: 1 | 2 }) {
         <span className={current > 1 ? styles.stepDone : styles.stepActive}>
           {current > 1 ? <CheckIcon /> : '1'}
         </span>
-        <span>레포지토리 선택</span>
+        <span>후보 레포 선택</span>
       </div>
       <span className={styles.stepLine} />
       <div className={styles.step}>

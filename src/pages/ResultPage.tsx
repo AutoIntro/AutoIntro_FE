@@ -5,12 +5,19 @@ import Card from '../components/common/Card';
 import Textarea from '../components/common/Textarea';
 import { ROUTES } from '../constants/constants';
 import { useResumeStore } from '../stores/resumeStore';
-import type { ResumeResult } from '../types/resume';
+import type { JobInput, ResumeResult } from '../types/resume';
 import styles from './ResultPage.module.css';
 
 export default function ResultPage() {
   const navigate = useNavigate();
-  const { result, jobInput, selectedRepositories, setResult, clear } = useResumeStore();
+  const {
+    result,
+    jobInput,
+    selectedRepositories,
+    repositoryMatches,
+    setResult,
+    clear,
+  } = useResumeStore();
 
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -80,9 +87,9 @@ export default function ResultPage() {
     }, 100);
   };
 
-  const handleRegenerate = () => {
+  const handleEditSettings = () => {
     if (jobInput && selectedRepositories.length > 0) {
-      navigate(ROUTES.LOADING);
+      navigate(ROUTES.JOB_INPUT);
       return;
     }
 
@@ -95,12 +102,16 @@ export default function ResultPage() {
     navigate(ROUTES.HOME);
   };
 
+  const primaryMatch = repositoryMatches[0];
+  const primaryKeywords =
+    primaryMatch?.matchedKeywords.slice(0, 3).join(', ') || '프로젝트 구현';
+
   return (
     <section className={styles.page}>
       <div className={styles.toolbar}>
-        <Button variant="ghost" size="sm" onClick={handleRegenerate}>
-          <RefreshIcon />
-          다시 생성
+        <Button variant="ghost" size="sm" onClick={handleEditSettings}>
+          <EditIcon />
+          설정 수정
         </Button>
         <Button variant="secondary" size="sm" onClick={handleCopy}>
           <CopyIcon />
@@ -162,12 +173,87 @@ export default function ResultPage() {
         )}
       </Card>
 
+      {repositoryMatches.length > 0 && (
+        <Card className={styles.evidenceCard}>
+          <div className={styles.evidenceHeader}>
+            <div>
+              <h2>자기소개서에 사용된 근거</h2>
+              <p>공고 요구사항과 GitHub 후보 레포의 매칭 점수를 기준으로 반영했습니다.</p>
+            </div>
+            <span>가중치 기반</span>
+          </div>
+
+          <div className={styles.evidenceGrid}>
+            <div className={styles.evidenceBlock}>
+              <h3>공고에서 반영한 데이터</h3>
+              <div className={styles.evidenceTags}>
+                {getJobEvidenceTags(jobInput).map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.evidenceBlock}>
+              <h3>우선 반영된 GitHub 근거</h3>
+              <p>
+                {primaryMatch?.repositoryName ?? '상위 레포'}를 중심으로 {primaryKeywords} 경험을 연결했습니다.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.repoEvidenceList}>
+            {repositoryMatches.slice(0, 3).map((match) => (
+              <article key={match.repositoryId} className={styles.repoEvidenceItem}>
+                <div className={styles.repoEvidenceTop}>
+                  <div>
+                    <span>{match.rank}순위</span>
+                    <h3>{match.repositoryName}</h3>
+                  </div>
+                  <strong>{match.score}점</strong>
+                </div>
+
+                <p className={styles.repoEvidenceSummary}>{match.summary}</p>
+
+                {match.matchedKeywords.length > 0 && (
+                  <div className={styles.evidenceTags}>
+                    {match.matchedKeywords.slice(0, 5).map((keyword) => (
+                      <span key={keyword}>{keyword}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div className={styles.signalList}>
+                  {[...match.jobSignals, ...match.repositorySignals].slice(0, 4).map((signal) => (
+                    <p key={signal}>{signal}</p>
+                  ))}
+                </div>
+
+                <p className={styles.improvementText}>{match.improvement}</p>
+              </article>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className={styles.footerActions}>
         <Button variant="secondary" onClick={handleRestart}>처음으로</Button>
         <Button onClick={() => navigate(ROUTES.REPOSITORIES)}>새 자기소개서 생성</Button>
       </div>
     </section>
   );
+}
+
+function getJobEvidenceTags(jobInput: JobInput | null) {
+  if (!jobInput) {
+    return ['공고 분석 결과'];
+  }
+
+  return [
+    jobInput.position,
+    ...jobInput.requiredSkills.slice(0, 4),
+    ...jobInput.preferredSkills.slice(0, 2),
+    ...jobInput.keywords.slice(0, 3),
+  ].filter((tag, index, tags) => tag.trim() !== '' && tags.indexOf(tag) === index);
 }
 
 function createResumePrintHtml(result: ResumeResult) {
@@ -233,15 +319,6 @@ function CheckIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="m5 12 4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function RefreshIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M20 12a8 8 0 1 1-2.3-5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M20 4v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

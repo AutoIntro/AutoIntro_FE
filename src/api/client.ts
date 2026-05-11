@@ -5,6 +5,7 @@ import type {
   AuthUser,
   JobInput,
   Repository,
+  RepositoryMatch,
   ResumeGenerationRequest,
   ResumeResult,
 } from '../types/resume';
@@ -211,11 +212,17 @@ function mapBackendRepository(repo: BackendGithubRepoInfo, index: number): Repos
   };
 }
 
-function createMockResumeResult(jobInput?: JobInput): ResumeResult {
+function createMockResumeResult(
+  jobInput?: JobInput,
+  repositoryMatches: RepositoryMatch[] = [],
+): ResumeResult {
   const position = jobInput?.position ?? '풀스택 개발자';
   const techStack = jobInput?.techStack ?? 'React, TypeScript, Node.js';
   const postingImage = jobInput?.jobPostingImageName || '채용공고 이미지';
   const companyName = jobInput?.companyName ? `${jobInput.companyName}의 ` : '';
+  const topRepository = repositoryMatches[0];
+  const topRepositoryName = topRepository?.repositoryName ?? '선택한 GitHub 프로젝트';
+  const topRepositoryKeywords = topRepository?.matchedKeywords.slice(0, 4).join(', ') || techStack;
   const responsibilities =
     jobInput?.responsibilities || '제품 요구사항을 이해하고 안정적인 서비스를 구현하는 업무';
   const requiredSkills = jobInput?.requiredSkills?.length
@@ -231,7 +238,7 @@ function createMockResumeResult(jobInput?: JobInput): ResumeResult {
   return {
     title: `${position} 지원 자기소개서`,
     strengths: [
-      'GitHub 프로젝트 기반 실전 개발 경험 보유',
+      `${topRepositoryName} 기반 실전 개발 경험 보유`,
       `${requiredSkills} 중심의 공고 요구 역량과 보유 기술 연결`,
       `${traits}을 보여주는 프로젝트 기여 경험`,
     ],
@@ -248,7 +255,7 @@ function createMockResumeResult(jobInput?: JobInput): ResumeResult {
 
 지원 공고는 ${postingImage}를 AI 이미지 분석한 결과를 기준으로 정리했으며, ${companyName}${position} 포지션에서 강조하는 주요 업무는 "${responsibilities}"입니다. 공고에서 확인한 필수 기술은 ${requiredSkills}이고, 우대 기술과 경험은 ${preferredSkills}입니다.
 
-특히 프로젝트를 진행하며 기능 구현뿐 아니라 요구사항 분석, API 연동, 상태 관리, 사용자 흐름 설계까지 함께 고려했습니다. 이러한 경험을 바탕으로 입사 후에도 ${traits}을 바탕으로 문제를 구조적으로 분석하고, 협업 과정에서 명확하게 소통하며, 안정적으로 동작하는 서비스를 만드는 데 기여하겠습니다.`,
+특히 ${topRepositoryName}은 공고와의 매칭 점수가 가장 높았고, ${topRepositoryKeywords} 근거를 중심으로 제 경험을 설명하기에 적합했습니다. 프로젝트를 진행하며 기능 구현뿐 아니라 요구사항 분석, API 연동, 상태 관리, 사용자 흐름 설계까지 함께 고려했습니다. 이러한 경험을 바탕으로 입사 후에도 ${traits}을 바탕으로 문제를 구조적으로 분석하고, 협업 과정에서 명확하게 소통하며, 안정적으로 동작하는 서비스를 만드는 데 기여하겠습니다.`,
   };
 }
 
@@ -301,8 +308,9 @@ export const apiClient = {
   async getResumeResult(
     _jobId: string,
     jobInput?: JobInput,
+    repositoryMatches?: RepositoryMatch[],
   ): Promise<ApiResponse<ResumeResult>> {
     await delay(MOCK_MODE ? 2500 : 1800);
-    return createApiResponse(createMockResumeResult(jobInput));
+    return createApiResponse(createMockResumeResult(jobInput, repositoryMatches));
   },
 };

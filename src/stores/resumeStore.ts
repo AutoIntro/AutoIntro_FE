@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { JobInput, Repository, ResumeResult } from '../types/resume';
+import type { JobInput, Repository, RepositoryMatch, ResumeResult } from '../types/resume';
 
 interface ResumeState {
   selectedRepositories: Repository[];
+  repositoryMatches: RepositoryMatch[];
   jobInput: JobInput | null;
   result: ResumeResult | null;
 
   setSelectedRepositories: (repositories: Repository[]) => void;
+  setRepositoryMatches: (matches: RepositoryMatch[]) => void;
   setJobInput: (jobInput: JobInput) => void;
   setResult: (result: ResumeResult) => void;
   clear: () => void;
@@ -22,18 +24,21 @@ export const useResumeStore = create<ResumeState>()(
   persist(
     (set) => ({
       selectedRepositories: [],
+      repositoryMatches: [],
       jobInput: null,
       result: null,
 
       setSelectedRepositories: (repositories) =>
         set({ selectedRepositories: repositories }),
 
+      setRepositoryMatches: (matches) => set({ repositoryMatches: matches }),
+
       setJobInput: (jobInput) => set({ jobInput }),
 
       setResult: (result) => set({ result }),
 
       clear: () =>
-        set({ selectedRepositories: [], jobInput: null, result: null }),
+        set({ selectedRepositories: [], repositoryMatches: [], jobInput: null, result: null }),
     }),
     {
       name: 'gitresume-resume',

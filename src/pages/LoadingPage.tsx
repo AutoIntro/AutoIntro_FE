@@ -10,13 +10,13 @@ type Stage = 'generating' | 'error';
 
 const PROGRESS_STEPS = [
   'GitHub 프로젝트 경험 분석 중',
-  '요구역량과 개발 경험 매칭 중',
+  '공고 맞춤 레포 우선순위 반영 중',
   '자기소개서 초안 생성 중',
 ];
 
 export default function LoadingPage() {
   const navigate = useNavigate();
-  const { selectedRepositories, jobInput, setResult } = useResumeStore();
+  const { selectedRepositories, repositoryMatches, jobInput, setResult } = useResumeStore();
 
   const [stage, setStage] = useState<Stage>('generating');
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,9 +47,14 @@ export default function LoadingPage() {
         } = await apiClient.generateResume({
           repositoryIds: selectedRepositories.map((repo) => repo.id),
           jobInput: jobInput!,
+          repositoryMatches,
         });
 
-        const { data: result } = await apiClient.getResumeResult(jobId, jobInput!);
+        const { data: result } = await apiClient.getResumeResult(
+          jobId,
+          jobInput!,
+          repositoryMatches,
+        );
         setResult(result);
         navigate(ROUTES.RESULT, { replace: true });
       } catch (err) {
