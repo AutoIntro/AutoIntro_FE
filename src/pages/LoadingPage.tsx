@@ -42,10 +42,17 @@ export default function LoadingPage() {
 
     async function generate() {
       try {
+        const savedProjectIds: number[] = [];
+
+        for (const repository of selectedRepositories) {
+          const { data } = await apiClient.saveProject(repository);
+          savedProjectIds.push(...data);
+        }
+
         const {
-          data: { jobId },
+          data: { jobId, result: generatedResult },
         } = await apiClient.generateResume({
-          repositoryIds: selectedRepositories.map((repo) => repo.id),
+          repositoryIds: savedProjectIds.map(String),
           jobInput: jobInput!,
           repositoryMatches,
         });
@@ -54,6 +61,7 @@ export default function LoadingPage() {
           jobId,
           jobInput!,
           repositoryMatches,
+          generatedResult,
         );
         setResult(result);
         navigate(ROUTES.RESULT, { replace: true });

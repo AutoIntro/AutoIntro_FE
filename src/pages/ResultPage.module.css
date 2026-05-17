@@ -72,6 +72,47 @@
   overflow: hidden;
 }
 
+.tabCard {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.tabHeader {
+  padding: 18px 26px;
+}
+
+.tabList {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-muted);
+}
+
+.tabButton {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 850;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tabButton:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.activeTab {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+
 .contentHeader {
   min-height: 84px;
   display: flex;
@@ -125,6 +166,12 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 0 26px 26px;
+}
+
+.evidencePanel {
+  display: grid;
+  gap: 22px;
+  padding: 26px;
 }
 
 .evidenceCard {
@@ -197,6 +244,19 @@
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.6;
+}
+
+.strengthList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.strengthList li {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .evidenceTags {
@@ -331,6 +391,20 @@
 
   .contentBody {
     padding: 26px 22px 36px;
+  }
+
+  .tabHeader,
+  .evidencePanel {
+    padding: 22px;
+  }
+
+  .tabList {
+    width: 100%;
+    border-radius: var(--radius-md);
+  }
+
+  .tabButton {
+    flex: 1;
   }
 
   .footerActions {

@@ -13,6 +13,7 @@ export interface Repository {
 export interface JobInput {
   position: string;
   jobPostingImageName: string;
+  jobPostingText?: string;
   companyName: string;
   responsibilities: string;
   requiredSkills: string[];
@@ -22,10 +23,48 @@ export interface JobInput {
   techStack: string;
 }
 
+export interface OcrField {
+  value: string;
+  evidence?: string;
+  confidence?: number;
+}
+
+export interface OcrEvidenceItem {
+  value: string;
+  evidence?: string;
+  confidence?: number;
+}
+
+export interface OcrSkillItem {
+  name: string;
+  evidence?: string;
+  confidence?: number;
+}
+
+export interface OcrAnalyzeResponse {
+  rawText: string;
+  jobPostingText?: string;
+  companyName?: OcrField;
+  position?: OcrField;
+  mainTasks?: OcrEvidenceItem[];
+  requiredSkills?: OcrSkillItem[];
+  preferredSkills?: OcrSkillItem[];
+  qualifications?: OcrEvidenceItem[];
+  keywords?: OcrSkillItem[];
+  warnings?: string[];
+  totalTokens?: number;
+  modelName?: string;
+}
+
 export interface ResumeGenerationRequest {
   repositoryIds: string[];
   jobInput: JobInput;
   repositoryMatches?: RepositoryMatch[];
+}
+
+export interface ResumeGenerationResult {
+  jobId: string;
+  result: ResumeResult;
 }
 
 export interface ResumeResult {

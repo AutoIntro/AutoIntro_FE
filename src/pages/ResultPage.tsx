@@ -8,6 +8,13 @@ import { useResumeStore } from '../stores/resumeStore';
 import type { JobInput, ResumeResult } from '../types/resume';
 import styles from './ResultPage.module.css';
 
+const RESULT_TABS = [
+  { id: 'resume', label: '자기소개서' },
+  { id: 'evidence', label: '자기소개서 근거' },
+] as const;
+
+type ResultTabId = (typeof RESULT_TABS)[number]['id'];
+
 export default function ResultPage() {
   const navigate = useNavigate();
   const {
@@ -22,6 +29,7 @@ export default function ResultPage() {
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<ResultTabId>('resume');
 
   useEffect(() => {
     if (result) {
@@ -133,107 +141,154 @@ export default function ResultPage() {
         </div>
       </div>
 
-      <Card className={styles.contentCard}>
-        <div className={styles.contentHeader}>
-          <h2>생성된 자기소개서</h2>
-          {!editMode && (
-            <button type="button" className={styles.editButton} onClick={() => setEditMode(true)}>
-              <EditIcon />
-              편집
-            </button>
-          )}
+      <Card className={styles.tabCard}>
+        <div className={styles.tabHeader}>
+          <div className={styles.tabList} role="tablist" aria-label="결과 보기">
+            {RESULT_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                className={[styles.tabButton, activeTab === tab.id ? styles.activeTab : ''].join(' ')}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className={styles.contentDivider} />
 
-        {editMode ? (
-          <>
-            <Textarea
-              label="자기소개서 본문"
-              value={editContent}
-              onChange={(event) => setEditContent(event.target.value)}
-              style={{ minHeight: 420 }}
-            />
-            <div className={styles.editActions}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setEditContent(result.content);
-                  setEditMode(false);
-                }}
-              >
-                취소
-              </Button>
-              <Button size="sm" onClick={handleSave}>저장</Button>
+        {activeTab === 'resume' ? (
+          <div>
+            <div className={styles.contentHeader}>
+              <h2>생성된 자기소개서</h2>
+              {!editMode && (
+                <button type="button" className={styles.editButton} onClick={() => setEditMode(true)}>
+                  <EditIcon />
+                  편집
+                </button>
+              )}
             </div>
-          </>
-        ) : (
-          <div className={styles.contentBody}>{result.content}</div>
-        )}
-      </Card>
 
-      {repositoryMatches.length > 0 && (
-        <Card className={styles.evidenceCard}>
-          <div className={styles.evidenceHeader}>
-            <div>
-              <h2>자기소개서에 사용된 근거</h2>
-              <p>공고 요구사항과 GitHub 후보 레포의 매칭 점수를 기준으로 반영했습니다.</p>
-            </div>
-            <span>가중치 기반</span>
+            <div className={styles.contentDivider} />
+
+            {editMode ? (
+              <>
+                <Textarea
+                  label="자기소개서 본문"
+                  value={editContent}
+                  onChange={(event) => setEditContent(event.target.value)}
+                  style={{ minHeight: 420 }}
+                />
+                <div className={styles.editActions}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setEditContent(result.content);
+                      setEditMode(false);
+                    }}
+                  >
+                    취소
+                  </Button>
+                  <Button size="sm" onClick={handleSave}>저장</Button>
+                </div>
+              </>
+            ) : (
+              <div className={styles.contentBody}>{result.content}</div>
+            )}
           </div>
+        ) : (
+          <div className={styles.evidencePanel}>
+            <div className={styles.evidenceHeader}>
+              <div>
+                <h2>자기소개서에 사용된 근거</h2>
+                <p>공고 요구사항, 선택한 레포지토리, 매칭 키워드를 기준으로 반영했습니다.</p>
+              </div>
+              <span>생성 근거</span>
+            </div>
 
-          <div className={styles.evidenceGrid}>
-            <div className={styles.evidenceBlock}>
-              <h3>공고에서 반영한 데이터</h3>
-              <div className={styles.evidenceTags}>
-                {getJobEvidenceTags(jobInput).map((tag) => (
-                  <span key={tag}>{tag}</span>
-                ))}
+            <div className={styles.evidenceGrid}>
+              <div className={styles.evidenceBlock}>
+                <h3>공고에서 반영한 항목</h3>
+                <div className={styles.evidenceTags}>
+                  {getJobEvidenceTags(jobInput).map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.evidenceBlock}>
+                <h3>자기소개서 핵심 근거</h3>
+                {result.strengths.length > 0 ? (
+                  <ul className={styles.strengthList}>
+                    {result.strengths.slice(0, 4).map((strength) => (
+                      <li key={strength}>{strength}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>
+                    {primaryMatch?.repositoryName ?? '선택한 레포지토리'}를 중심으로 {primaryKeywords} 경험을 연결했습니다.
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className={styles.evidenceBlock}>
-              <h3>우선 반영된 GitHub 근거</h3>
-              <p>
-                {primaryMatch?.repositoryName ?? '상위 레포'}를 중심으로 {primaryKeywords} 경험을 연결했습니다.
-              </p>
-            </div>
-          </div>
-
-          <div className={styles.repoEvidenceList}>
-            {repositoryMatches.slice(0, 3).map((match) => (
-              <article key={match.repositoryId} className={styles.repoEvidenceItem}>
-                <div className={styles.repoEvidenceTop}>
-                  <div>
-                    <span>{match.rank}순위</span>
-                    <h3>{match.repositoryName}</h3>
-                  </div>
-                  <strong>{match.score}점</strong>
-                </div>
-
-                <p className={styles.repoEvidenceSummary}>{match.summary}</p>
-
-                {match.matchedKeywords.length > 0 && (
-                  <div className={styles.evidenceTags}>
-                    {match.matchedKeywords.slice(0, 5).map((keyword) => (
-                      <span key={keyword}>{keyword}</span>
-                    ))}
-                  </div>
-                )}
-
-                <div className={styles.signalList}>
-                  {[...match.jobSignals, ...match.repositorySignals].slice(0, 4).map((signal) => (
-                    <p key={signal}>{signal}</p>
+            {result.techKeywords.length > 0 && (
+              <div className={styles.evidenceBlock}>
+                <h3>본문에 반영된 기술 키워드</h3>
+                <div className={styles.evidenceTags}>
+                  {result.techKeywords.slice(0, 12).map((keyword) => (
+                    <span key={keyword}>{keyword}</span>
                   ))}
                 </div>
+              </div>
+            )}
 
-                <p className={styles.improvementText}>{match.improvement}</p>
-              </article>
-            ))}
+            {repositoryMatches.length > 0 ? (
+              <div className={styles.repoEvidenceList}>
+                {repositoryMatches.slice(0, 3).map((match) => (
+                  <article key={match.repositoryId} className={styles.repoEvidenceItem}>
+                    <div className={styles.repoEvidenceTop}>
+                      <div>
+                        <span>{match.rank}순위</span>
+                        <h3>{match.repositoryName}</h3>
+                      </div>
+                      <strong>{match.score}점</strong>
+                    </div>
+
+                    <p className={styles.repoEvidenceSummary}>{match.summary}</p>
+
+                    {match.matchedKeywords.length > 0 && (
+                      <div className={styles.evidenceTags}>
+                        {match.matchedKeywords.slice(0, 5).map((keyword) => (
+                          <span key={keyword}>{keyword}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className={styles.signalList}>
+                      {[...match.jobSignals, ...match.repositorySignals].slice(0, 4).map((signal) => (
+                        <p key={signal}>{signal}</p>
+                      ))}
+                    </div>
+
+                    <p className={styles.improvementText}>{match.improvement}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.evidenceBlock}>
+                <h3>레포지토리 매칭 근거</h3>
+                <p>저장된 레포지토리 매칭 결과가 없습니다. 공고 분석 데이터와 선택한 기술 키워드를 중심으로 초안이 생성되었습니다.</p>
+              </div>
+            )}
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       <div className={styles.footerActions}>
         <Button variant="secondary" onClick={handleRestart}>처음으로</Button>

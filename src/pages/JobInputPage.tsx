@@ -8,18 +8,26 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiClient } from '../api/client';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
 import { ROUTES } from '../constants/constants';
 import { JOB_POSITION_SUGGESTIONS, type JobPositionSuggestion } from '../constants/jobPositions';
 import { useResumeStore } from '../stores/resumeStore';
-import type { JobInput, Repository, RepositoryMatch } from '../types/resume';
+import type { JobInput, OcrAnalyzeResponse, Repository, RepositoryMatch } from '../types/resume';
+import {
+  mapOcrResultToFormState,
+  type OcrFieldEvidence,
+  type OcrFieldKey,
+  type OcrTagFieldKey,
+} from '../utils/ocrEvidence';
 import { rankRepositoriesForJob } from '../utils/repositoryMatching';
 import styles from './JobInputPage.module.css';
 
 const INITIAL: JobInput = {
   position: '',
   jobPostingImageName: '',
+  jobPostingText: '',
   companyName: '',
   responsibilities: '',
   requiredSkills: [],
@@ -31,6 +39,7 @@ const INITIAL: JobInput = {
 
 const MAX_POSITION_SUGGESTIONS = 10;
 const POSITION_SUGGESTION_LIST_ID = 'position-suggestions';
+const MAX_JOB_POSTING_IMAGES = 2;
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg'];
 const IMAGE_ANALYSIS_STEPS = [
   '이미지 업로드 완료',
@@ -60,122 +69,6 @@ const CHOSEONG = [
   'ㅍ',
   'ㅎ',
 ] as const;
-
-const DEFAULT_PROFILE: JobAnalysisProfile = {
-  position: '백엔드 개발자',
-  keywords: ['backend', 'back-end', '백엔드', 'server', '서버', 'api', 'spring', 'java'],
-  responsibilities: '서비스 API를 설계하고 데이터베이스, 인증, 배포 환경을 고려해 안정적인 서버 기능을 구현합니다.',
-  requiredSkills: ['Java', 'Spring Boot', 'MySQL', 'REST API'],
-  preferredSkills: ['AWS', 'Docker', 'CI/CD'],
-  traits: ['협업 능력', '문제 해결 능력', '자기주도성'],
-};
-
-const JOB_ANALYSIS_PROFILES: JobAnalysisProfile[] = [
-  {
-    position: 'React 개발자',
-    keywords: ['react', 'react.js', 'reactjs', '리액트', 'next.js', 'nextjs'],
-    responsibilities: 'React 기반 사용자 화면을 구현하고 API 연동, 상태 관리, 성능 최적화를 통해 제품 경험을 개선합니다.',
-    requiredSkills: ['React', 'TypeScript', 'JavaScript', 'HTML/CSS'],
-    preferredSkills: ['Next.js', 'Redux', '웹 접근성'],
-    traits: ['사용자 중심 사고', '협업 능력', '문제 해결 능력'],
-  },
-  {
-    position: '프론트엔드 개발자',
-    keywords: ['frontend', 'front-end', 'front end', '프론트엔드', '프론트'],
-    responsibilities: '웹 서비스 화면과 인터랙션을 구현하고 백엔드 API와 연결해 사용자가 안정적으로 기능을 이용하도록 만듭니다.',
-    requiredSkills: ['JavaScript', 'TypeScript', 'React', 'HTML/CSS'],
-    preferredSkills: ['Next.js', 'Storybook', '테스트 자동화'],
-    traits: ['사용자 중심 사고', '꼼꼼함', '협업 능력'],
-  },
-  {
-    position: 'Flutter 개발자',
-    keywords: ['flutter', '플러터', 'dart', 'cross platform', '크로스플랫폼'],
-    responsibilities: 'Flutter 기반 모바일 앱 화면과 상태 흐름을 구현하고 iOS, Android 양쪽에서 일관된 사용자 경험을 제공합니다.',
-    requiredSkills: ['Flutter', 'Dart', 'REST API', 'Git'],
-    preferredSkills: ['Firebase', 'iOS', 'Android'],
-    traits: ['사용자 중심 사고', '문제 해결 능력', '품질 의식'],
-  },
-  {
-    position: 'iOS 개발자',
-    keywords: ['ios', 'swift', 'iphone', '아이오에스', '스위프트'],
-    responsibilities: 'iOS 앱 기능을 구현하고 네이티브 UX, API 연동, 앱 성능과 안정성을 개선합니다.',
-    requiredSkills: ['Swift', 'UIKit', 'SwiftUI', 'REST API'],
-    preferredSkills: ['Combine', 'Firebase', 'App Store 배포'],
-    traits: ['품질 의식', '문제 해결 능력', '사용자 중심 사고'],
-  },
-  {
-    position: 'Android 개발자',
-    keywords: ['android', '안드로이드', 'kotlin', 'jetpack', 'compose'],
-    responsibilities: 'Android 앱 기능을 구현하고 화면 상태, API 연동, 앱 성능과 안정성을 개선합니다.',
-    requiredSkills: ['Kotlin', 'Android', 'Jetpack Compose', 'REST API'],
-    preferredSkills: ['Coroutine', 'Firebase', 'Play Store 배포'],
-    traits: ['품질 의식', '문제 해결 능력', '사용자 중심 사고'],
-  },
-  {
-    position: '백엔드 개발자',
-    keywords: ['backend', 'back-end', 'back end', '백엔드', 'server', '서버', 'spring', 'java', 'node.js'],
-    responsibilities: '서비스 API와 데이터 모델을 설계하고 장애에 강한 서버 로직과 운영 가능한 백엔드 시스템을 구현합니다.',
-    requiredSkills: ['Java', 'Spring Boot', 'MySQL', 'REST API'],
-    preferredSkills: ['AWS', 'Docker', 'Redis'],
-    traits: ['문제 해결 능력', '책임감', '협업 능력'],
-  },
-  {
-    position: '클라우드 엔지니어',
-    keywords: ['cloud', '클라우드', 'aws', 'azure', 'gcp', 'infrastructure', 'infra', '인프라'],
-    responsibilities: '클라우드 인프라를 설계하고 배포, 모니터링, 보안 설정을 자동화해 서비스 운영 안정성을 높입니다.',
-    requiredSkills: ['AWS', 'Linux', 'Docker', 'Terraform'],
-    preferredSkills: ['Kubernetes', 'CI/CD', '모니터링'],
-    traits: ['안정성 중심 사고', '문제 해결 능력', '책임감'],
-  },
-  {
-    position: 'DevOps 엔지니어',
-    keywords: ['devops', 'dev ops', '데브옵스', 'ci/cd', 'cicd', 'kubernetes', 'docker'],
-    responsibilities: '빌드, 배포, 모니터링 파이프라인을 자동화하고 개발팀이 빠르고 안정적으로 릴리즈할 수 있는 환경을 만듭니다.',
-    requiredSkills: ['Docker', 'Kubernetes', 'GitHub Actions', 'Linux'],
-    preferredSkills: ['AWS', 'Terraform', 'Prometheus'],
-    traits: ['자동화 사고', '문제 해결 능력', '협업 능력'],
-  },
-  {
-    position: '데이터 엔지니어',
-    keywords: ['data engineer', '데이터 엔지니어', 'etl', 'pipeline', '파이프라인', 'spark', 'airflow'],
-    responsibilities: '데이터 수집, 적재, 변환 파이프라인을 구축하고 분석과 서비스에 필요한 데이터 품질을 관리합니다.',
-    requiredSkills: ['Python', 'SQL', 'Airflow', 'ETL'],
-    preferredSkills: ['Spark', 'Kafka', 'AWS'],
-    traits: ['정확성', '문제 해결 능력', '책임감'],
-  },
-  {
-    position: '머신러닝 엔지니어',
-    keywords: ['machine learning', 'ml engineer', '머신러닝', 'ai', '인공지능', 'deep learning', '딥러닝'],
-    responsibilities: '모델 학습과 평가, 서빙 파이프라인을 구축하고 실제 서비스 지표를 기준으로 AI 기능을 개선합니다.',
-    requiredSkills: ['Python', 'Machine Learning', 'PyTorch', 'SQL'],
-    preferredSkills: ['MLOps', 'Docker', 'AWS'],
-    traits: ['실험 설계 역량', '문제 해결 능력', '데이터 기반 사고'],
-  },
-  {
-    position: 'QA 엔지니어',
-    keywords: ['qa', 'quality assurance', 'test automation', '테스트', '품질'],
-    responsibilities: '테스트 계획을 수립하고 주요 사용자 흐름과 회귀 테스트를 자동화해 제품 품질을 안정적으로 관리합니다.',
-    requiredSkills: ['테스트 설계', 'Jira', 'API 테스트', '품질 관리'],
-    preferredSkills: ['Playwright', 'Cypress', '테스트 자동화'],
-    traits: ['꼼꼼함', '품질 의식', '커뮤니케이션'],
-  },
-  {
-    position: '보안 엔지니어',
-    keywords: ['security', '보안', 'cybersecurity', 'appsec', 'devsecops'],
-    responsibilities: '서비스와 인프라의 보안 위험을 점검하고 취약점 대응, 접근 제어, 보안 정책 개선을 수행합니다.',
-    requiredSkills: ['보안 점검', '네트워크', 'Linux', '취약점 분석'],
-    preferredSkills: ['DevSecOps', '클라우드 보안', '침투 테스트'],
-    traits: ['책임감', '분석력', '문제 해결 능력'],
-  },
-  {
-    position: '프로덕트 매니저 (PM)',
-    keywords: ['product manager', 'pm', '프로덕트 매니저', '제품 관리자', '서비스 기획', '기획자'],
-    responsibilities: '사용자 문제를 정의하고 요구사항, 우선순위, 지표를 정리해 개발팀과 함께 제품 개선을 이끕니다.',
-    requiredSkills: ['요구사항 정의', '데이터 분석', '커뮤니케이션', '제품 기획'],
-    preferredSkills: ['SQL', 'Figma', 'Jira'],
-    traits: ['문제 정의 능력', '협업 능력', '사용자 중심 사고'],
-  },
-];
 
 const TECH_KEYWORDS = [
   'React',
@@ -228,19 +121,20 @@ type PositionSearchTarget = {
   priority: number;
 };
 
-type JobAnalysisProfile = {
-  position: string;
-  keywords: string[];
-  responsibilities: string;
-  requiredSkills: string[];
-  preferredSkills: string[];
-  traits: string[];
-};
+const SETUP_STEPS = [
+  { id: 'upload', number: '1', title: '채용 공고 이미지 업로드' },
+  { id: 'analysis', number: '2', title: '자동분석 결과' },
+  { id: 'skills', number: '3', title: '기술 스택' },
+] as const;
 
-type JobPostingAnalysis = Pick<
-  JobInput,
-  'companyName' | 'position' | 'responsibilities' | 'requiredSkills' | 'preferredSkills' | 'traits' | 'keywords'
->;
+type SetupStepId = (typeof SETUP_STEPS)[number]['id'];
+
+const EMPTY_TAG_EVIDENCE: Record<OcrTagFieldKey, Record<string, string>> = {
+  requiredSkills: {},
+  preferredSkills: {},
+  traits: {},
+  keywords: {},
+};
 
 const POSITION_SEARCH_INDEX = JOB_POSITION_SUGGESTIONS.map((suggestion, index) => ({
   suggestion,
@@ -251,13 +145,14 @@ const POSITION_SEARCH_INDEX = JOB_POSITION_SUGGESTIONS.map((suggestion, index) =
 export default function JobInputPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagePreviewUrlsRef = useRef<string[]>([]);
   const setJobInput = useResumeStore((s) => s.setJobInput);
   const setRepositoryMatches = useResumeStore((s) => s.setRepositoryMatches);
   const selectedRepositories = useResumeStore((s) => s.selectedRepositories);
 
   const [form, setForm] = useState<JobInput>(INITIAL);
-  const [postingImage, setPostingImage] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [postingImages, setPostingImages] = useState<File[]>([]);
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStepIndex, setAnalysisStepIndex] = useState(0);
@@ -265,6 +160,13 @@ export default function JobInputPage() {
   const [hasAnalysisCompleted, setHasAnalysisCompleted] = useState(false);
   const [isPositionFocused, setIsPositionFocused] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [activeSetupStep, setActiveSetupStep] = useState<SetupStepId>('upload');
+  const [ocrResult, setOcrResult] = useState<OcrAnalyzeResponse | null>(null);
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
+  const [fieldEvidence, setFieldEvidence] = useState<Partial<Record<OcrFieldKey, OcrFieldEvidence>>>({});
+  const [tagEvidence, setTagEvidence] =
+    useState<Record<OcrTagFieldKey, Record<string, string>>>(EMPTY_TAG_EVIDENCE);
+  const [showRawText, setShowRawText] = useState(false);
 
   const ownedTechStack = useMemo(() => parseTags(form.techStack), [form.techStack]);
   const positionSuggestions = useMemo(
@@ -294,18 +196,25 @@ export default function JobInputPage() {
     form.jobPostingImageName.trim() !== '' &&
     ownedTechStack.length > 0 &&
     !isAnalyzing;
+  const completedSetupSteps: SetupStepId[] = [
+    ...(postingImages.length > 0 ? (['upload'] as const) : []),
+    ...(hasAnalysisResult ? (['analysis'] as const) : []),
+    ...(ownedTechStack.length > 0 ? (['skills'] as const) : []),
+  ];
 
   useEffect(() => {
     setActiveSuggestionIndex(0);
   }, [form.position]);
 
   useEffect(() => {
+    imagePreviewUrlsRef.current = imagePreviewUrls;
+  }, [imagePreviewUrls]);
+
+  useEffect(() => {
     return () => {
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl);
-      }
+      imagePreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [imagePreviewUrl]);
+  }, []);
 
   if (selectedRepositories.length === 0) {
     return (
@@ -401,26 +310,18 @@ export default function JobInputPage() {
     selectImageFile(event.dataTransfer.files);
   };
 
-  const selectImageFile = (files: FileList | null) => {
-    const file = files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setAnalysisError('PNG, JPG, JPEG 파일만 업로드할 수 있습니다.');
-      return;
-    }
-
-    setPostingImage(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
-    setAnalysisError('');
+  const resetAnalysisStateForImages = (images: File[]) => {
     setAnalysisStepIndex(0);
     setHasAnalysisCompleted(false);
+    setActiveSetupStep('upload');
+    setOcrResult(null);
+    setOcrWarnings([]);
+    setFieldEvidence({});
+    setTagEvidence(EMPTY_TAG_EVIDENCE);
+    setShowRawText(false);
     setForm((prev) => ({
       ...prev,
-      jobPostingImageName: file.name,
+      jobPostingImageName: images.map((file) => file.name).join(', '),
       companyName: '',
       position: '',
       responsibilities: '',
@@ -428,12 +329,81 @@ export default function JobInputPage() {
       preferredSkills: [],
       traits: [],
       keywords: [],
+      jobPostingText: '',
     }));
   };
 
+  const selectImageFile = (files: FileList | null) => {
+    const selectedFiles = Array.from(files ?? []);
+
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    if (selectedFiles.some((file) => !ACCEPTED_IMAGE_TYPES.includes(file.type))) {
+      setAnalysisError('PNG, JPG, JPEG 파일만 업로드할 수 있습니다.');
+      return;
+    }
+
+    if (postingImages.length >= MAX_JOB_POSTING_IMAGES) {
+      setAnalysisError(`이미지는 최대 ${MAX_JOB_POSTING_IMAGES}장까지 업로드할 수 있습니다.`);
+      return;
+    }
+
+    const imageKeys = new Set(postingImages.map(getImageFileKey));
+    const addedImages: File[] = [];
+
+    selectedFiles.forEach((file) => {
+      const key = getImageFileKey(file);
+
+      if (imageKeys.has(key) || postingImages.length + addedImages.length >= MAX_JOB_POSTING_IMAGES) {
+        return;
+      }
+
+      imageKeys.add(key);
+      addedImages.push(file);
+    });
+
+    if (addedImages.length === 0) {
+      setAnalysisError('이미 선택된 이미지이거나 업로드 가능한 개수를 초과했습니다.');
+      return;
+    }
+
+    const nextImages = [...postingImages, ...addedImages];
+    const nextPreviewUrls = [
+      ...imagePreviewUrls,
+      ...addedImages.map((file) => URL.createObjectURL(file)),
+    ];
+
+    setPostingImages(nextImages);
+    setImagePreviewUrls(nextPreviewUrls);
+    setAnalysisError(
+      selectedFiles.length > addedImages.length
+        ? `최대 ${MAX_JOB_POSTING_IMAGES}장까지만 분석합니다. 추가 가능한 이미지만 반영했어요.`
+        : '',
+    );
+    resetAnalysisStateForImages(nextImages);
+  };
+
+  const removePostingImage = (targetIndex: number) => {
+    const removedPreviewUrl = imagePreviewUrls[targetIndex];
+    const nextImages = postingImages.filter((_, index) => index !== targetIndex);
+    const nextPreviewUrls = imagePreviewUrls.filter((_, index) => index !== targetIndex);
+
+    if (removedPreviewUrl) {
+      URL.revokeObjectURL(removedPreviewUrl);
+    }
+
+    setPostingImages(nextImages);
+    setImagePreviewUrls(nextPreviewUrls);
+    setAnalysisError('');
+    resetAnalysisStateForImages(nextImages);
+  };
+
   const analyzeImage = async () => {
-    if (!postingImage) {
+    if (postingImages.length === 0) {
       setAnalysisError('채용공고 이미지를 먼저 업로드해 주세요.');
+      setActiveSetupStep('upload');
       return;
     }
 
@@ -447,26 +417,32 @@ export default function JobInputPage() {
         await wait(index === 1 ? 450 : 560);
       }
 
-      const analysis = createJobPostingAnalysis({
-        imageName: postingImage.name,
-        selectedRepositories,
-      });
+      const { data } = await apiClient.analyzeJobPostingImages(postingImages);
+      const mappedResult = mapOcrResultToFormState(data);
 
       setForm((prev) => {
         const nextOwnedSkills = mergeTags(
           parseTags(prev.techStack),
           getRepositorySkillHints(selectedRepositories),
-          analysis.requiredSkills.slice(0, 5),
         );
 
         return {
           ...prev,
-          ...analysis,
-          jobPostingImageName: postingImage.name,
+          ...mappedResult.formPatch,
+          jobPostingImageName: postingImages.map((image) => image.name).join(', '),
           techStack: formatTags(nextOwnedSkills),
         };
       });
+      setOcrResult(data);
+      setOcrWarnings(mappedResult.warnings);
+      setFieldEvidence(mappedResult.fieldEvidence);
+      setTagEvidence(mappedResult.tagEvidence);
       setHasAnalysisCompleted(true);
+      setActiveSetupStep('analysis');
+    } catch (err) {
+      console.error(err);
+      setAnalysisError(err instanceof Error ? err.message : '채용공고 OCR 처리에 실패했습니다.');
+      setHasAnalysisCompleted(false);
     } finally {
       setIsAnalyzing(false);
     }
@@ -485,252 +461,345 @@ export default function JobInputPage() {
       traits: normalizeTags(form.traits),
       keywords: normalizeTags(form.keywords),
       techStack: formatTags(ownedTechStack),
+      jobPostingText: form.jobPostingText?.trim() ?? '',
     });
     navigate(ROUTES.LOADING);
   };
 
+  const handlePreviousAction = () => {
+    if (activeSetupStep === 'upload') {
+      navigate(ROUTES.REPOSITORIES);
+      return;
+    }
+
+    const activeIndex = SETUP_STEPS.findIndex((step) => step.id === activeSetupStep);
+    setActiveSetupStep(SETUP_STEPS[Math.max(activeIndex - 1, 0)].id);
+  };
+
   return (
     <section className={styles.page}>
-      <StepHeader />
+      <StepHeader
+        activeStep={activeSetupStep}
+        completedSteps={completedSetupSteps}
+        onSelect={setActiveSetupStep}
+      />
 
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>자기소개서 설정</h1>
         <p className={styles.pageDesc}>
-          채용공고 이미지를 업로드하면 AI가 공고 내용을 분석하여 필요한 항목을 자동으로 채워줍니다.
+          채용공고 이미지 업로드부터 자동분석 결과 확인, 기술 스택 정리까지 단계별로 진행합니다.
         </p>
       </div>
 
       <Card className={styles.formCard}>
-        <div className={styles.section}>
-          <SectionHeader
-            number="1"
-            title="채용공고 이미지 업로드"
-            required
-            description="채용공고 화면을 캡처하거나 저장한 이미지를 업로드해주세요."
-          />
+        {activeSetupStep === 'upload' && (
+          <div className={styles.section}>
+            <SectionHeader
+              number="1"
+              title="채용공고 이미지 업로드"
+              required
+              description="같은 채용공고의 연속 이미지를 상단부터 순서대로 최대 2장까지 업로드해주세요."
+            />
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            className={styles.visuallyHidden}
-            onChange={handleFileInputChange}
-          />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              multiple
+              className={styles.visuallyHidden}
+              onChange={handleFileInputChange}
+            />
 
-          <div
-            className={[styles.uploadDropzone, isDragging ? styles.dragging : ''].join(' ')}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className={styles.uploadIcon} aria-hidden="true">
-              <ImageIcon />
-            </div>
-            <div>
-              <strong>채용공고 이미지를 업로드하세요</strong>
-              <p>PNG, JPG, JPEG 파일 지원</p>
-              <p>또는 이미지를 이 영역에 끌어다 놓기</p>
-            </div>
-            <Button variant="secondary" onClick={openFilePicker}>
-              이미지 선택하기
-            </Button>
-          </div>
-
-          {postingImage && imagePreviewUrl && (
-            <div className={styles.previewPanel}>
+            <div
+              className={[styles.uploadDropzone, isDragging ? styles.dragging : ''].join(' ')}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className={styles.uploadIcon} aria-hidden="true">
+                <ImageIcon />
+              </div>
               <div>
-                <h3 className={styles.panelTitle}>업로드된 이미지 미리보기</h3>
-                <div className={styles.previewFrame}>
-                  <img src={imagePreviewUrl} alt="업로드된 채용공고 이미지 미리보기" />
-                </div>
+                <strong>채용공고 이미지를 업로드하세요</strong>
+                <p>PNG, JPG, JPEG 파일 지원</p>
+                <p>같은 공고의 연속 캡처를 최대 2장까지 선택할 수 있습니다.</p>
               </div>
-              <div className={styles.previewMeta}>
-                <p>
-                  파일명: <strong>{postingImage.name}</strong>
-                </p>
-                <div className={styles.previewActions}>
-                  <Button variant="secondary" onClick={openFilePicker}>
-                    다른 이미지 선택
-                  </Button>
-                  <Button disabled={isAnalyzing} onClick={() => void analyzeImage()}>
-                    {isAnalyzing ? '분석 중...' : '공고 이미지 분석'}
-                  </Button>
-                </div>
-              </div>
+              <Button
+                variant="secondary"
+                disabled={postingImages.length >= MAX_JOB_POSTING_IMAGES || isAnalyzing}
+                onClick={openFilePicker}
+              >
+                {postingImages.length >= MAX_JOB_POSTING_IMAGES ? '최대 2장 선택됨' : '이미지 선택하기'}
+              </Button>
             </div>
-          )}
 
-          <div className={styles.qualityGuide}>
-            <h3>이미지 업로드 안내</h3>
-            <ul>
-              <li>글자가 선명하게 보이는 이미지를 사용해주세요.</li>
-              <li>화면 전체 캡처보다 공고 본문 영역만 캡처하면 분석 정확도가 높아집니다.</li>
-              <li>현재는 대표 이미지 1장을 업로드해주세요.</li>
-              <li>흐릿한 이미지나 글자가 작은 이미지는 분석 결과가 부정확할 수 있습니다.</li>
-            </ul>
-          </div>
+            {postingImages.length > 0 && imagePreviewUrls.length > 0 && (
+              <div className={styles.previewPanel}>
+                <div>
+                  <h3 className={styles.panelTitle}>업로드된 이미지 미리보기</h3>
+                  <div className={styles.previewGrid}>
+                    {postingImages.map((image, index) => (
+                      <div key={`${image.name}-${image.lastModified}`} className={styles.previewItem}>
+                        <div className={styles.previewFrame}>
+                          <button
+                            type="button"
+                            className={styles.removeImageButton}
+                            aria-label={`${index + 1}번 이미지 삭제`}
+                            disabled={isAnalyzing}
+                            onClick={() => removePostingImage(index)}
+                          >
+                            ×
+                          </button>
+                          <img
+                            src={imagePreviewUrls[index]}
+                            alt={`업로드된 채용공고 이미지 ${index + 1} 미리보기`}
+                          />
+                        </div>
+                        <span>{index + 1}번 이미지</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.previewMeta}>
+                  <div>
+                    <p>
+                      업로드 이미지: <strong>{postingImages.length}장</strong>
+                    </p>
+                    <ul className={styles.previewFileList}>
+                      {postingImages.map((image, index) => (
+                        <li key={`${image.name}-${image.lastModified}`}>
+                          {index + 1}. {image.name}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className={styles.previewActions}>
+                    <Button
+                      variant="secondary"
+                      disabled={postingImages.length >= MAX_JOB_POSTING_IMAGES || isAnalyzing}
+                      onClick={openFilePicker}
+                    >
+                      {postingImages.length >= MAX_JOB_POSTING_IMAGES ? '최대 2장 선택됨' : '이미지 추가하기'}
+                    </Button>
+                    <Button disabled={isAnalyzing} onClick={() => void analyzeImage()}>
+                      {isAnalyzing ? '분석 중...' : '공고 이미지 분석'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {(postingImage || isAnalyzing || hasAnalysisCompleted) && (
-            <ImageAnalysisStatus
-              activeIndex={analysisStepIndex}
-              isAnalyzing={isAnalyzing}
-              isComplete={hasAnalysisCompleted}
-            />
-          )}
+            <div className={styles.qualityGuide}>
+              <h3>이미지 업로드 안내</h3>
+              <ul>
+                <li>글자가 선명하게 보이는 이미지를 사용해주세요.</li>
+                <li>서로 다른 공고가 아닌 같은 공고의 상단/하단 이미지만 업로드해주세요.</li>
+                <li>화면 전체 캡처보다 공고 본문 영역만 캡처하면 분석 정확도가 높아집니다.</li>
+                <li>이미지는 선택한 순서대로 이어지는 내용으로 분석됩니다.</li>
+                <li>흐릿한 이미지나 글자가 작은 이미지는 분석 결과가 부정확할 수 있습니다.</li>
+              </ul>
+            </div>
 
-          {analysisError && <p className={styles.errorText}>{analysisError}</p>}
-        </div>
-
-        <div className={styles.divider} />
-
-        <div className={styles.section}>
-          <SectionHeader
-            number="2"
-            title="자동 분석 결과"
-            description="이미지 분석이 완료되면 아래 항목이 자동으로 입력됩니다. 필요하면 직접 수정할 수 있습니다."
-          />
-
-          {!hasAnalysisResult && (
-            <p className={styles.resultHint}>
-              채용공고 이미지를 업로드하면 분석 결과가 이곳에 자동으로 입력됩니다.
-            </p>
-          )}
-
-          <div className={styles.analysisGrid}>
-            <TextInputField
-              label="회사명"
-              name="companyName"
-              placeholder="자동 입력 / 수정 가능"
-              value={form.companyName}
-              onChange={handleTextChange('companyName')}
-            />
-
-            <div className={styles.autocomplete}>
-              <label htmlFor="position" className={styles.label}>
-                지원 직무
-              </label>
-              <input
-                id="position"
-                name="position"
-                className={styles.control}
-                placeholder="예: 백엔드 개발자, 프론트엔드 개발자, 클라우드 엔지니어"
-                value={form.position}
-                onChange={handleTextChange('position')}
-                onFocus={() => setIsPositionFocused(true)}
-                onBlur={() => setIsPositionFocused(false)}
-                onKeyDown={handlePositionKeyDown}
-                role="combobox"
-                autoComplete="off"
-                aria-autocomplete="list"
-                aria-controls={showPositionSuggestions ? POSITION_SUGGESTION_LIST_ID : undefined}
-                aria-expanded={showPositionSuggestions}
-                aria-activedescendant={
-                  showPositionSuggestions
-                    ? getPositionSuggestionOptionId(activePositionSuggestionIndex)
-                    : undefined
-                }
+            {(postingImages.length > 0 || isAnalyzing || hasAnalysisCompleted) && (
+              <ImageAnalysisStatus
+                activeIndex={analysisStepIndex}
+                isAnalyzing={isAnalyzing}
+                isComplete={hasAnalysisCompleted}
               />
+            )}
 
-              {showPositionSuggestions && (
-                <ul
-                  id={POSITION_SUGGESTION_LIST_ID}
-                  className={styles.suggestionList}
-                  role="listbox"
-                  onMouseDown={(event) => event.preventDefault()}
-                >
-                  {positionSuggestions.map((position, index) => (
-                    <li key={position.label} role="presentation">
-                      <button
-                        id={getPositionSuggestionOptionId(index)}
-                        type="button"
-                        className={[
-                          styles.suggestionOption,
-                          index === activePositionSuggestionIndex ? styles.activeSuggestion : '',
-                        ].join(' ')}
-                        role="option"
-                        aria-selected={index === activePositionSuggestionIndex}
-                        onMouseEnter={() => setActiveSuggestionIndex(index)}
-                        onClick={() => selectPosition(position.label)}
+            {analysisError && <p className={styles.errorText}>{analysisError}</p>}
+          </div>
+        )}
+
+        {activeSetupStep === 'analysis' && (
+          <div className={styles.section}>
+            <SectionHeader
+              number="2"
+              title="자동분석 결과"
+              description="이미지 분석이 완료되면 아래 항목이 자동으로 입력됩니다. 필요하면 직접 수정할 수 있습니다."
+            />
+
+            {!ocrResult && !hasAnalysisResult ? (
+              <div className={styles.emptyStepState}>
+                <strong>아직 분석된 채용공고가 없습니다.</strong>
+                <p>1단계에서 이미지를 업로드한 뒤 공고 이미지 분석 버튼을 누르면 이 탭으로 자동 이동합니다.</p>
+                <Button variant="secondary" onClick={() => setActiveSetupStep('upload')}>
+                  이미지 업로드로 돌아가기
+                </Button>
+              </div>
+            ) : (
+              <>
+                <AnalysisTrustPanel
+                  rawText={ocrResult?.rawText ?? form.jobPostingText ?? ''}
+                  warnings={ocrWarnings}
+                  showRawText={showRawText}
+                  onToggleRawText={() => setShowRawText((current) => !current)}
+                />
+
+                <div className={styles.analysisGrid}>
+                  <TextInputField
+                    label="회사명"
+                    name="companyName"
+                    placeholder="자동 입력 / 수정 가능"
+                    value={form.companyName}
+                    onChange={handleTextChange('companyName')}
+                    evidence={fieldEvidence.companyName}
+                  />
+
+                  <div className={styles.autocomplete}>
+                    <label htmlFor="position" className={styles.label}>
+                      지원 직무
+                      {fieldEvidence.position?.requiresReview && (
+                        <span className={styles.reviewBadge}>확인 필요</span>
+                      )}
+                    </label>
+                    <input
+                      id="position"
+                      name="position"
+                      className={styles.control}
+                      placeholder="예: 백엔드 개발자, 프론트엔드 개발자, 클라우드 엔지니어"
+                      value={form.position}
+                      onChange={handleTextChange('position')}
+                      onFocus={() => setIsPositionFocused(true)}
+                      onBlur={() => setIsPositionFocused(false)}
+                      onKeyDown={handlePositionKeyDown}
+                      role="combobox"
+                      autoComplete="off"
+                      aria-autocomplete="list"
+                      aria-controls={showPositionSuggestions ? POSITION_SUGGESTION_LIST_ID : undefined}
+                      aria-expanded={showPositionSuggestions}
+                      aria-activedescendant={
+                        showPositionSuggestions
+                          ? getPositionSuggestionOptionId(activePositionSuggestionIndex)
+                          : undefined
+                      }
+                    />
+
+                    {showPositionSuggestions && (
+                      <ul
+                        id={POSITION_SUGGESTION_LIST_ID}
+                        className={styles.suggestionList}
+                        role="listbox"
+                        onMouseDown={(event) => event.preventDefault()}
                       >
-                        {position.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        {positionSuggestions.map((position, index) => (
+                          <li key={position.label} role="presentation">
+                            <button
+                              id={getPositionSuggestionOptionId(index)}
+                              type="button"
+                              className={[
+                                styles.suggestionOption,
+                                index === activePositionSuggestionIndex
+                                  ? styles.activeSuggestion
+                                  : '',
+                              ].join(' ')}
+                              role="option"
+                              aria-selected={index === activePositionSuggestionIndex}
+                              onMouseEnter={() => setActiveSuggestionIndex(index)}
+                              onClick={() => selectPosition(position.label)}
+                            >
+                              {position.label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <FieldEvidenceNote evidence={fieldEvidence.position} />
+                  </div>
+
+                  <div className={styles.wideField}>
+                    <label htmlFor="responsibilities" className={styles.label}>
+                      주요 업무
+                    </label>
+                    <textarea
+                      id="responsibilities"
+                      name="responsibilities"
+                      className={[styles.control, styles.textareaControl].join(' ')}
+                      placeholder="자동 입력 / 수정 가능"
+                      value={form.responsibilities}
+                      onChange={handleTextChange('responsibilities')}
+                    />
+                  </div>
+
+                  <TagEditor
+                    label="필수 기술"
+                    values={form.requiredSkills}
+                    placeholder="예: Java, Spring Boot, MySQL, AWS"
+                    evidenceByValue={tagEvidence.requiredSkills}
+                    onChange={(values) => updateTagField('requiredSkills', values)}
+                  />
+
+                  <TagEditor
+                    label="우대 기술"
+                    values={form.preferredSkills}
+                    placeholder="예: Docker, Kubernetes, CI/CD"
+                    evidenceByValue={tagEvidence.preferredSkills}
+                    onChange={(values) => updateTagField('preferredSkills', values)}
+                  />
+
+                  <TagEditor
+                    label="인재상 / 자격요건"
+                    values={form.traits}
+                    placeholder="예: 협업 능력, 문제 해결 능력"
+                    evidenceByValue={tagEvidence.traits}
+                    onChange={(values) => updateTagField('traits', values)}
+                  />
+
+                  <TagEditor
+                    label="핵심 키워드"
+                    values={form.keywords}
+                    placeholder="예: 백엔드, API, 클라우드"
+                    evidenceByValue={tagEvidence.keywords}
+                    onChange={(values) => updateTagField('keywords', values)}
+                  />
+                </div>
+
+                <RepositoryRankingPanel matches={repositoryMatches} />
+
+                <div className={styles.nextStepCallout}>
+                  <div>
+                    <strong>분석 결과 확인이 끝났다면</strong>
+                    <p>다음 단계에서 자기소개서에 강조할 내 보유 기술스택을 정리해주세요.</p>
+                  </div>
+                  <Button onClick={() => setActiveSetupStep('skills')}>
+                    기술 스택으로 이동
+                    <ArrowRightIcon />
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {activeSetupStep === 'skills' && (
+          <div className={styles.section}>
+            <SectionHeader
+              number="3"
+              title="내 보유 기술스택"
+              required
+              description="GitHub 분석 결과와 자기소개서에 강조할 기술을 선택하거나 입력해주세요."
+            />
+
+            <div className={styles.stepNotice}>
+              <strong>마지막 단계입니다.</strong>
+              <p>자동분석 결과에서 뽑힌 필수 기술과 선택한 GitHub 레포의 기술을 함께 확인한 뒤 생성하면 됩니다.</p>
             </div>
 
-            <div className={styles.wideField}>
-              <label htmlFor="responsibilities" className={styles.label}>
-                주요 업무
-              </label>
-              <textarea
-                id="responsibilities"
-                name="responsibilities"
-                className={[styles.control, styles.textareaControl].join(' ')}
-                placeholder="자동 입력 / 수정 가능"
-                value={form.responsibilities}
-                onChange={handleTextChange('responsibilities')}
-              />
+            <div className={styles.loadSkillsRow}>
+              <Button variant="secondary" onClick={loadGitHubSkills}>
+                GitHub 분석 기술 불러오기
+              </Button>
             </div>
 
             <TagEditor
-              label="필수 기술"
-              values={form.requiredSkills}
-              placeholder="예: Java, Spring Boot, MySQL, AWS"
-              onChange={(values) => updateTagField('requiredSkills', values)}
-            />
-
-            <TagEditor
-              label="우대 기술"
-              values={form.preferredSkills}
-              placeholder="예: Docker, Kubernetes, CI/CD"
-              onChange={(values) => updateTagField('preferredSkills', values)}
-            />
-
-            <TagEditor
-              label="인재상 / 자격요건"
-              values={form.traits}
-              placeholder="예: 협업 능력, 문제 해결 능력"
-              onChange={(values) => updateTagField('traits', values)}
-            />
-
-            <TagEditor
-              label="핵심 키워드"
-              values={form.keywords}
-              placeholder="예: 백엔드, API, 클라우드"
-              onChange={(values) => updateTagField('keywords', values)}
+              label="강조할 기술스택"
+              values={ownedTechStack}
+              placeholder="예: React, TypeScript, Spring Boot, MySQL, Docker, AWS"
+              onChange={updateOwnedTechStack}
             />
           </div>
-
-          {hasAnalysisResult && (
-            <RepositoryRankingPanel matches={repositoryMatches} />
-          )}
-        </div>
-
-        <div className={styles.divider} />
-
-        <div className={styles.section}>
-          <SectionHeader
-            number="3"
-            title="내 보유 기술스택"
-            required
-            description="GitHub 분석 결과와 자기소개서에 강조할 기술을 선택하거나 입력해주세요."
-          />
-
-          <div className={styles.loadSkillsRow}>
-            <Button variant="secondary" onClick={loadGitHubSkills}>
-              GitHub 분석 기술 불러오기
-            </Button>
-          </div>
-
-          <TagEditor
-            label="강조할 기술스택"
-            values={ownedTechStack}
-            placeholder="예: React, TypeScript, Spring Boot, MySQL, Docker, AWS"
-            onChange={updateOwnedTechStack}
-          />
-        </div>
+        )}
       </Card>
 
       <div className={styles.selectedRepos}>
@@ -741,13 +810,31 @@ export default function JobInputPage() {
 
       <div className={styles.bottomBar}>
         <div className={styles.bottomInner}>
-          <Button variant="ghost" onClick={() => navigate(ROUTES.REPOSITORIES)}>
-            이전
+          <Button variant="ghost" onClick={handlePreviousAction}>
+            {activeSetupStep === 'upload' ? '이전' : '이전 단계'}
           </Button>
-          <Button disabled={!isValid} onClick={handleSubmit}>
-            이 내용으로 자기소개서 생성
-            <ArrowRightIcon />
-          </Button>
+          <div className={styles.bottomActions}>
+            {activeSetupStep === 'upload' && (
+              <Button disabled={postingImages.length === 0 || isAnalyzing} onClick={() => void analyzeImage()}>
+                {isAnalyzing ? '분석 중...' : '공고 이미지 분석'}
+                <ArrowRightIcon />
+              </Button>
+            )}
+
+            {activeSetupStep === 'analysis' && (
+              <Button disabled={!hasAnalysisResult} onClick={() => setActiveSetupStep('skills')}>
+                기술 스택으로 이동
+                <ArrowRightIcon />
+              </Button>
+            )}
+
+            {activeSetupStep === 'skills' && (
+              <Button disabled={!isValid} onClick={handleSubmit}>
+                이 내용으로 자기소개서 생성
+                <ArrowRightIcon />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </section>
@@ -783,17 +870,20 @@ function TextInputField({
   placeholder,
   value,
   onChange,
+  evidence,
 }: {
   label: string;
   name: string;
   placeholder: string;
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  evidence?: OcrFieldEvidence;
 }) {
   return (
     <div className={styles.field}>
       <label htmlFor={name} className={styles.label}>
         {label}
+        {evidence?.requiresReview && <span className={styles.reviewBadge}>확인 필요</span>}
       </label>
       <input
         id={name}
@@ -803,6 +893,61 @@ function TextInputField({
         value={value}
         onChange={onChange}
       />
+      <FieldEvidenceNote evidence={evidence} />
+    </div>
+  );
+}
+
+function FieldEvidenceNote({ evidence }: { evidence?: OcrFieldEvidence }) {
+  if (!evidence) {
+    return <p className={styles.noEvidenceText}>근거 없음: 자동 입력되지 않았거나 사용자가 직접 입력한 값입니다.</p>;
+  }
+
+  return (
+    <p className={evidence.requiresReview ? styles.reviewEvidenceText : styles.evidenceText}>
+      근거: {evidence.evidence}
+      {typeof evidence.confidence === 'number' && ` · confidence ${Math.round(evidence.confidence * 100)}%`}
+    </p>
+  );
+}
+
+function AnalysisTrustPanel({
+  rawText,
+  warnings,
+  showRawText,
+  onToggleRawText,
+}: {
+  rawText: string;
+  warnings: string[];
+  showRawText: boolean;
+  onToggleRawText: () => void;
+}) {
+  return (
+    <div className={styles.trustPanel}>
+      <div className={styles.trustHeader}>
+        <div>
+          <strong>근거가 확인된 항목만 자동 입력됩니다.</strong>
+          <p>이미지 분석 결과는 자동 입력값입니다. 제출 전 반드시 확인해주세요.</p>
+        </div>
+        <button type="button" className={styles.rawToggleButton} onClick={onToggleRawText}>
+          {showRawText ? '원문 접기' : 'OCR 원문 보기'}
+        </button>
+      </div>
+
+      {warnings.length > 0 && (
+        <div className={styles.warningBox}>
+          <strong>확인 필요</strong>
+          <ul>
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showRawText && (
+        <pre className={styles.rawTextBox}>{rawText || 'OCR 원문이 없습니다.'}</pre>
+      )}
     </div>
   );
 }
@@ -871,7 +1016,7 @@ function ImageAnalysisStatus({
   const message = isComplete
     ? '이미지 분석이 완료되었습니다. 자동 입력된 내용을 확인하고 필요한 경우 수정해주세요.'
     : isAnalyzing
-      ? 'AI가 채용공고 이미지의 텍스트를 읽고 있습니다.'
+      ? 'AI가 채용공고 이미지의 텍스트를 순서대로 읽고 있습니다.'
       : '이미지가 업로드되었습니다. 공고 이미지 분석 버튼을 눌러주세요.';
 
   return (
@@ -909,11 +1054,13 @@ function TagEditor({
   label,
   values,
   placeholder,
+  evidenceByValue = {},
   onChange,
 }: {
   label: string;
   values: string[];
   placeholder: string;
+  evidenceByValue?: Record<string, string>;
   onChange: (values: string[]) => void;
 }) {
   const [draft, setDraft] = useState('');
@@ -950,19 +1097,28 @@ function TagEditor({
         {label}
       </label>
       <div className={styles.tagBox}>
-        {values.map((value) => (
-          <span key={value} className={styles.tag}>
-            {value}
-            <button
-              type="button"
-              className={styles.tagRemove}
-              aria-label={`${value} 삭제`}
-              onClick={() => removeTag(value)}
+        {values.map((value) => {
+          const evidence = evidenceByValue[value];
+
+          return (
+            <span
+              key={value}
+              className={[styles.tag, evidence ? styles.evidenceTag : styles.manualTag].join(' ')}
+              title={evidence ? `근거: ${evidence}` : '사용자가 직접 추가했거나 OCR 근거가 없는 항목'}
             >
-              ×
-            </button>
-          </span>
-        ))}
+              {value}
+              {evidence ? <span className={styles.tagEvidenceDot} aria-label="근거 있음" /> : null}
+              <button
+                type="button"
+                className={styles.tagRemove}
+                aria-label={`${value} 삭제`}
+                onClick={() => removeTag(value)}
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
         <input
           className={styles.tagInput}
           value={draft}
@@ -983,21 +1139,41 @@ function TagEditor({
   );
 }
 
-function StepHeader() {
+function StepHeader({
+  activeStep,
+  completedSteps,
+  onSelect,
+}: {
+  activeStep: SetupStepId;
+  completedSteps: SetupStepId[];
+  onSelect: (step: SetupStepId) => void;
+}) {
   return (
-    <div className={styles.steps} aria-label="자기소개서 생성 단계">
-      <div className={styles.step}>
-        <span className={styles.stepDone}>
-          <CheckIcon />
-        </span>
-        <span>후보 레포 선택</span>
-      </div>
-      <span className={styles.stepLine} />
-      <div className={styles.step}>
-        <span className={styles.stepActive}>2</span>
-        <span>설정</span>
-      </div>
-    </div>
+    <nav className={styles.steps} aria-label="채용공고 분석 단계">
+      {SETUP_STEPS.map((step, index) => {
+        const isActive = activeStep === step.id;
+        const isComplete = completedSteps.includes(step.id);
+
+        return (
+          <div key={step.id} className={styles.stepTrackItem}>
+            <button
+              type="button"
+              className={[
+                styles.stepButton,
+                isActive ? styles.stepButtonActive : '',
+                isComplete ? styles.stepButtonComplete : '',
+              ].join(' ')}
+              aria-current={isActive ? 'step' : undefined}
+              onClick={() => onSelect(step.id)}
+            >
+              <span className={styles.stepBadge}>{step.number}</span>
+              <span>{step.title}</span>
+            </button>
+            {index < SETUP_STEPS.length - 1 && <span className={styles.stepLine} />}
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -1027,48 +1203,8 @@ function ArrowRightIcon() {
   );
 }
 
-function createJobPostingAnalysis({
-  imageName,
-  selectedRepositories,
-}: {
-  imageName: string;
-  selectedRepositories: Repository[];
-}): JobPostingAnalysis {
-  const profile = inferJobProfile(imageName);
-  const detectedSkills = extractKnownSkills(imageName);
-  const requiredSkills = mergeTags(profile.requiredSkills, detectedSkills).slice(0, 8);
-  const preferredSkills = mergeTags(profile.preferredSkills, getCloudOrOpsHints(imageName)).slice(0, 8);
-  const traits = mergeTags(profile.traits, ['협업 능력', '문제 해결 능력', '자기주도성']).slice(0, 6);
-  const repositoryKeywords = getRepositorySkillHints(selectedRepositories).slice(0, 4);
-  const keywords = mergeTags(
-    [profile.position],
-    requiredSkills.slice(0, 4),
-    preferredSkills.slice(0, 3),
-    repositoryKeywords,
-    traits.slice(0, 2),
-  ).slice(0, 10);
-
-  return {
-    companyName: inferCompanyNameFromImageName(imageName),
-    position: profile.position,
-    responsibilities: profile.responsibilities,
-    requiredSkills,
-    preferredSkills,
-    traits,
-    keywords,
-  };
-}
-
-function inferJobProfile(sourceValue: string) {
-  const normalizedSource = normalizeSearchText(sourceValue);
-
-  return (
-    JOB_ANALYSIS_PROFILES.find((profile) =>
-      profile.keywords.some((keyword) =>
-        normalizedSource.includes(normalizeSearchText(keyword)),
-      ),
-    ) ?? DEFAULT_PROFILE
-  );
+function getImageFileKey(file: File) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
 }
 
 function extractKnownSkills(sourceValue: string) {
@@ -1077,43 +1213,6 @@ function extractKnownSkills(sourceValue: string) {
   return TECH_KEYWORDS.filter((skill) =>
     normalizedSource.includes(normalizeSearchText(skill)),
   );
-}
-
-function getCloudOrOpsHints(sourceValue: string) {
-  const normalizedSource = normalizeSearchText(sourceValue);
-  const hints: string[] = [];
-
-  if (normalizedSource.includes('aws')) hints.push('AWS');
-  if (normalizedSource.includes('docker')) hints.push('Docker');
-  if (normalizedSource.includes('kubernetes') || normalizedSource.includes('k8s')) {
-    hints.push('Kubernetes');
-  }
-  if (normalizedSource.includes('cicd') || normalizedSource.includes('githubactions')) {
-    hints.push('CI/CD');
-  }
-
-  return hints;
-}
-
-function inferCompanyNameFromImageName(imageName: string) {
-  const normalizedName = normalizeSearchText(imageName);
-  const knownCompanies: Array<[string, string]> = [
-    ['kakao', 'Kakao'],
-    ['naver', 'NAVER'],
-    ['line', 'LINE'],
-    ['coupang', 'Coupang'],
-    ['toss', 'Toss'],
-    ['woowahan', '우아한형제들'],
-    ['baemin', '우아한형제들'],
-    ['danggeun', '당근'],
-    ['carrot', '당근'],
-    ['wanted', 'Wanted'],
-    ['programmers', 'Programmers'],
-    ['jumpit', 'Jumpit'],
-  ];
-  const matchedCompany = knownCompanies.find(([keyword]) => normalizedName.includes(keyword));
-
-  return matchedCompany?.[1] ?? '채용공고 회사';
 }
 
 function getRepositorySkillHints(repositories: Repository[]) {

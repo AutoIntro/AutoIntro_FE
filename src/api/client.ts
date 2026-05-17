@@ -4,9 +4,11 @@ import type { ApiResponse, BackendApiResponse } from '../types/common';
 import type {
   AuthUser,
   JobInput,
+  OcrAnalyzeResponse,
   Repository,
   RepositoryMatch,
   ResumeGenerationRequest,
+  ResumeGenerationResult,
   ResumeResult,
 } from '../types/resume';
 
@@ -79,6 +81,77 @@ interface BackendGithubRepoListInfo {
   totalCount: number;
 }
 
+interface BackendSaveProjectRequestBody {
+  fullRepoName: string;
+  repoName: string;
+  repoUrl: string;
+  mainLang: string;
+  description: string | null;
+  isPrivate: boolean;
+}
+
+type ProjectIdValue = number | string | null | undefined;
+
+interface BackendSaveProjectObjectResult {
+  id?: ProjectIdValue;
+  projectId?: ProjectIdValue;
+  projectIds?: ProjectIdValue[];
+  project?: {
+    id?: ProjectIdValue;
+    projectId?: ProjectIdValue;
+  };
+}
+
+type BackendSaveProjectResult = ProjectIdValue | BackendSaveProjectObjectResult;
+
+interface BackendIntroductionProjectWeight {
+  projectId: number;
+  repoName: string;
+  mainLang: string;
+  score: number;
+  matchedKeywords: string[];
+  reason: string;
+}
+
+interface BackendIntroductionWeightResult {
+  projects: BackendIntroductionProjectWeight[];
+  totalCount: number;
+}
+
+interface BackendIntroductionGenerateResult {
+  requestId: number;
+  aiIntroductionId: number;
+  userIntroductionId: number;
+  content: string;
+  jobPostingText: string;
+  weightResult: BackendIntroductionWeightResult;
+  totalTokens: number;
+  modelName: string;
+}
+
+type BackendOcrResult = Partial<OcrAnalyzeResponse> & {
+  jobPostingText?: string;
+};
+
+interface IntroductionGenerateRequestBody {
+  companyName: string;
+  targetJob: string;
+  keywords: string;
+  type: 'RESUME';
+  amount: 'SHORT' | 'MEDIUM' | 'LONG';
+  extraDetail: string;
+  jobPostingText: string;
+  projectIds: number[];
+}
+
+interface IntroductionWeightRequestBody {
+  targetJob: string;
+  keywords: string;
+  extraDetail: string;
+  jobPostingText: string;
+  projectIds: number[];
+}
+
 type ApiRequestInit = RequestInit & {
   auth?: boolean;
 };
@@ -126,8 +199,9 @@ function getRequestUrl(path: string) {
 
 function getAuthHeaders(options?: ApiRequestInit) {
   const headers = new Headers(options?.headers);
+  const isFormDataBody = typeof FormData !== 'undefined' && options?.body instanceof FormData;
 
-  if (options?.body !== undefined && !headers.has('Content-Type')) {
+  if (options?.body !== undefined && !isFormDataBody && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -209,6 +283,281 @@ function mapBackendRepository(repo: BackendGithubRepoInfo, index: number): Repos
     isPrivate: repo.isPrivate,
     stars: 0,
     updatedAt: repo.isPrivate ? 'Private' : 'Public',
+  };
+}
+
+function createSaveProjectRequestBody(repo: Repository): BackendSaveProjectRequestBody {
+  return {
+    fullRepoName: repo.fullName,
+    repoName: repo.name,
+    repoUrl: repo.url,
+    mainLang: repo.language,
+    description: repo.description || null,
+    isPrivate: repo.isPrivate,
+  };
+}
+
+function toPositiveInteger(value: ProjectIdValue) {
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
+function getSavedProjectIds(result: BackendSaveProjectResult) {
+  if (typeof result === 'number' || typeof result === 'string') {
+    const projectId = toPositiveInteger(result);
+    return projectId ? [projectId] : [];
+  }
+
+  if (!result) {
+    return [];
+  }
+
+  const projectIds = [
+    ...(result.projectIds ?? []),
+    result.projectId,
+    result.id,
+    result.project?.projectId,
+    result.project?.id,
+  ]
+    .map(toPositiveInteger)
+    .filter((projectId): projectId is number => projectId !== null);
+
+  return [...new Set(projectIds)];
+}
+
+function createMockProjectId(repo: Repository) {
+  const hash = repo.id
+    .split('')
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+
+  return (hash % 100000) + 1;
+}
+
+function getNumericProjectIds(repositoryIds: string[]) {
+  return repositoryIds
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+function normalizeKeywordList(values: readonly string[]) {
+  const seen = new Set<string>();
+  const keywords: string[] = [];
+
+  values.forEach((value) => {
+    const keyword = value.trim();
+    const key = keyword.toLowerCase();
+
+    if (keyword === '' || seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    keywords.push(keyword);
+  });
+
+  return keywords;
+}
+
+function getJobPostingText(jobInput: JobInput) {
+  if (jobInput.jobPostingText?.trim()) {
+    return jobInput.jobPostingText.trim();
+  }
+
+  return [
+    jobInput.responsibilities && `주요 업무: ${jobInput.responsibilities}`,
+    jobInput.requiredSkills.length > 0 && `필수 기술: ${jobInput.requiredSkills.join(', ')}`,
+    jobInput.preferredSkills.length > 0 && `우대 기술: ${jobInput.preferredSkills.join(', ')}`,
+    jobInput.traits.length > 0 && `인재상/자격요건: ${jobInput.traits.join(', ')}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function createIntroductionKeywords(jobInput: JobInput) {
+  return normalizeKeywordList([
+    ...jobInput.keywords,
+    ...jobInput.requiredSkills,
+    ...jobInput.preferredSkills,
+    jobInput.techStack,
+  ]).join(', ');
+}
+
+function createIntroductionExtraDetail(jobInput: JobInput) {
+  return [
+    jobInput.responsibilities && `주요 업무: ${jobInput.responsibilities}`,
+    jobInput.traits.length > 0 && `인재상/자격요건: ${jobInput.traits.join(', ')}`,
+    jobInput.techStack && `지원자 보유 기술: ${jobInput.techStack}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function createIntroductionRequestBody(
+  payload: ResumeGenerationRequest,
+): IntroductionGenerateRequestBody {
+  const { jobInput } = payload;
+
+  return {
+    companyName: jobInput.companyName,
+    targetJob: jobInput.position,
+    keywords: createIntroductionKeywords(jobInput),
+    type: 'RESUME',
+    amount: 'SHORT',
+    extraDetail: createIntroductionExtraDetail(jobInput),
+    jobPostingText: getJobPostingText(jobInput),
+    projectIds: getNumericProjectIds(payload.repositoryIds),
+  };
+}
+
+function createWeightRequestBody(
+  payload: ResumeGenerationRequest,
+): IntroductionWeightRequestBody {
+  const generateBody = createIntroductionRequestBody(payload);
+
+  return {
+    targetJob: generateBody.targetJob,
+    keywords: generateBody.keywords,
+    extraDetail: generateBody.extraDetail,
+    jobPostingText: generateBody.jobPostingText,
+    projectIds: generateBody.projectIds,
+  };
+}
+
+function mapBackendProjectToRepositoryMatch(
+  project: BackendIntroductionProjectWeight,
+  index: number,
+): RepositoryMatch {
+  return {
+    repositoryId: String(project.projectId),
+    repositoryName: project.repoName,
+    repositoryUrl: '',
+    rank: index + 1,
+    score: Math.round(project.score),
+    matchedKeywords: project.matchedKeywords,
+    jobSignals: project.matchedKeywords.length > 0
+      ? [`매칭 키워드: ${project.matchedKeywords.join(', ')}`]
+      : [],
+    repositorySignals: [
+      project.mainLang && `주요 언어 ${project.mainLang}`,
+      project.reason,
+    ].filter(Boolean),
+    summary: project.reason || `${project.repoName} 기반 경험을 자기소개서에 반영했습니다.`,
+    improvement: '백엔드 가중치 분석 결과를 기준으로 반영했습니다.',
+  };
+}
+
+function mapIntroductionResultToResumeResult(
+  jobInput: JobInput,
+  result: BackendIntroductionGenerateResult,
+): ResumeResult {
+  const projects = result.weightResult?.projects ?? [];
+  const projectKeywords = projects.flatMap((project) => project.matchedKeywords);
+  const techKeywords = normalizeKeywordList([
+    ...jobInput.techStack.split(','),
+    ...jobInput.requiredSkills,
+    ...jobInput.preferredSkills,
+    ...projectKeywords,
+  ]).slice(0, 10);
+  const strengths = projects
+    .slice(0, 3)
+    .map((project) => project.reason || `${project.repoName} 기반 경험`);
+
+  return {
+    title: `${jobInput.position} 지원 자기소개서`,
+    content: result.content,
+    strengths,
+    techKeywords,
+  };
+}
+
+function normalizeOcrAnalyzeResponse(result: BackendOcrResult): OcrAnalyzeResponse {
+  const rawText = result.rawText?.trim() || result.jobPostingText?.trim() || '';
+
+  return {
+    rawText,
+    jobPostingText: result.jobPostingText ?? rawText,
+    companyName: result.companyName,
+    position: result.position,
+    mainTasks: result.mainTasks ?? [],
+    requiredSkills: result.requiredSkills ?? [],
+    preferredSkills: result.preferredSkills ?? [],
+    qualifications: result.qualifications ?? [],
+    keywords: result.keywords ?? [],
+    warnings: result.warnings ?? [],
+    totalTokens: result.totalTokens,
+    modelName: result.modelName,
+  };
+}
+
+function createMockOcrAnalyzeResponse(): OcrAnalyzeResponse {
+  const rawText = `자바 백엔드 경력 채용
+(주)인공지능팩토리
+사용 기술: Linode, NGINX, PostgreSQL, Redis, Spring Boot, Spring MVC, Spring Data JPA, DB, Infra
+주요업무
+웹 백엔드 설계·개발·운영을 담당하게 됩니다.
+REST API 설계 및 구현
+비즈니스 로직 및 데이터 처리
+자격요건
+Java/Kotlin 언어 및 Spring Boot 기반 백엔드 실무 경험
+관계형 DBMS(PostgreSQL 등)의 트랜잭션 설계·튜닝 가능
+우대사항
+Kubernetes + Docker 기반 컨테이너 오케스트레이션 경험
+MSA 환경에서의 서비스 설계·운영 경험`;
+
+  return {
+    rawText,
+    jobPostingText: rawText,
+    companyName: {
+      value: '(주)인공지능팩토리',
+      evidence: '(주)인공지능팩토리',
+      confidence: 0.95,
+    },
+    position: {
+      value: '자바 백엔드 경력 채용',
+      evidence: '자바 백엔드 경력 채용',
+      confidence: 0.94,
+    },
+    mainTasks: [
+      {
+        value: '웹 백엔드 설계·개발·운영',
+        evidence: '웹 백엔드 설계·개발·운영을 담당하게 됩니다.',
+      },
+      {
+        value: 'REST API 설계 및 구현',
+        evidence: 'REST API 설계 및 구현',
+      },
+      {
+        value: '비즈니스 로직 및 데이터 처리',
+        evidence: '비즈니스 로직 및 데이터 처리',
+      },
+    ],
+    requiredSkills: [
+      { name: 'Java', evidence: 'Java/Kotlin 언어 및 Spring Boot 기반 백엔드 실무 경험' },
+      { name: 'Kotlin', evidence: 'Java/Kotlin 언어 및 Spring Boot 기반 백엔드 실무 경험' },
+      { name: 'Spring Boot', evidence: 'Spring Boot 기반 백엔드 실무 경험' },
+      { name: 'PostgreSQL', evidence: '관계형 DBMS(PostgreSQL 등)의 트랜잭션 설계·튜닝 가능' },
+      { name: 'React', evidence: '근거 없는 프론트엔드 기술' },
+      { name: 'Next.js', evidence: 'NestJS와 혼동된 항목' },
+    ],
+    preferredSkills: [
+      { name: 'Docker', evidence: 'Kubernetes + Docker 기반 컨테이너 오케스트레이션 경험' },
+      { name: 'Kubernetes', evidence: 'Kubernetes + Docker 기반 컨테이너 오케스트레이션 경험' },
+      { name: 'MSA', evidence: 'MSA 환경에서의 서비스 설계·운영 경험' },
+    ],
+    qualifications: [
+      {
+        value: '백엔드 실무 경험',
+        evidence: 'Spring Boot 기반 백엔드 실무 경험',
+      },
+    ],
+    keywords: [
+      { name: '자바 백엔드', evidence: '자바 백엔드 경력 채용' },
+      { name: 'REST API', evidence: 'REST API 설계 및 구현' },
+      { name: 'Redis', evidence: 'Redis' },
+    ],
+    warnings: ['이미지 분석 결과는 자동 입력값입니다. 제출 전 반드시 확인해주세요.'],
+    totalTokens: 0,
+    modelName: 'mock-ocr-analyze',
   };
 }
 
@@ -297,20 +646,117 @@ export const apiClient = {
     return createApiResponse(data.repos.map(mapBackendRepository), message, code);
   },
 
+  async saveProject(repo: Repository): Promise<ApiResponse<number[]>> {
+    if (MOCK_MODE) {
+      await delay(500);
+      return createApiResponse([createMockProjectId(repo)]);
+    }
+
+    const { data, message, code } = await request<BackendSaveProjectResult>('/git', {
+      method: 'POST',
+      body: JSON.stringify(createSaveProjectRequestBody(repo)),
+    });
+
+    return createApiResponse(getSavedProjectIds(data), message, code);
+  },
+
   async generateResume(
     payload: ResumeGenerationRequest,
-  ): Promise<ApiResponse<{ jobId: string }>> {
-    void payload;
-    await delay(MOCK_MODE ? 500 : 700);
-    return createApiResponse({ jobId: crypto.randomUUID() });
+  ): Promise<ApiResponse<ResumeGenerationResult>> {
+    if (MOCK_MODE) {
+      await delay(500);
+      const result = createMockResumeResult(payload.jobInput, payload.repositoryMatches);
+      return createApiResponse({ jobId: crypto.randomUUID(), result });
+    }
+
+    const { data, message, code } = await request<BackendIntroductionGenerateResult>(
+      '/introductions/generate',
+      {
+        method: 'POST',
+        body: JSON.stringify(createIntroductionRequestBody(payload)),
+      },
+    );
+
+    return createApiResponse(
+      {
+        jobId: String(data.requestId),
+        result: mapIntroductionResultToResumeResult(payload.jobInput, data),
+      },
+      message,
+      code,
+    );
   },
 
   async getResumeResult(
     _jobId: string,
     jobInput?: JobInput,
     repositoryMatches?: RepositoryMatch[],
+    result?: ResumeResult,
   ): Promise<ApiResponse<ResumeResult>> {
+    if (result) {
+      return createApiResponse(result);
+    }
+
     await delay(MOCK_MODE ? 2500 : 1800);
     return createApiResponse(createMockResumeResult(jobInput, repositoryMatches));
+  },
+
+  async previewIntroductionWeights(
+    payload: ResumeGenerationRequest,
+  ): Promise<ApiResponse<RepositoryMatch[]>> {
+    if (MOCK_MODE) {
+      await delay(500);
+      return createApiResponse(payload.repositoryMatches ?? []);
+    }
+
+    const { data, message, code } = await request<BackendIntroductionWeightResult>(
+      '/introductions/weights',
+      {
+        method: 'POST',
+        body: JSON.stringify(createWeightRequestBody(payload)),
+      },
+    );
+
+    return createApiResponse(
+      data.projects.map(mapBackendProjectToRepositoryMatch),
+      message,
+      code,
+    );
+  },
+
+  async analyzeJobPostingImages(images: File[]): Promise<ApiResponse<OcrAnalyzeResponse>> {
+    if (MOCK_MODE) {
+      await delay(700);
+      return createApiResponse(createMockOcrAnalyzeResponse());
+    }
+
+    const formData = new FormData();
+
+    images.forEach((image) => {
+      formData.append('images', image);
+    });
+
+    if (images[0]) {
+      formData.append('image', images[0]);
+    }
+
+    const { data, message, code } = await request<BackendOcrResult>('/introductions/ocr', {
+      method: 'POST',
+      body: formData,
+    });
+
+    return createApiResponse(normalizeOcrAnalyzeResponse(data), message, code);
+  },
+
+  async extractJobPostingText(image: File): Promise<ApiResponse<OcrAnalyzeResponse>> {
+    const formData = new FormData();
+    formData.append('image', image);
+
+    const { data, message, code } = await request<BackendOcrResult>('/introductions/ocr', {
+      method: 'POST',
+      body: formData,
+    });
+
+    return createApiResponse(normalizeOcrAnalyzeResponse(data), message, code);
   },
 };

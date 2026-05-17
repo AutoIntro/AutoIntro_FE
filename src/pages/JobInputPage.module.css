@@ -1,5 +1,5 @@
 .page {
-  padding-bottom: 20px;
+  padding-bottom: 132px;
 }
 
 .guard {
@@ -20,36 +20,74 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 76px;
-  color: var(--accent-strong);
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 42px;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 700;
 }
 
-.step {
+.stepTrackItem {
+  display: inline-flex;
+  align-items: center;
+}
+
+.stepButton {
+  min-height: 46px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 850;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.stepActive,
-.stepDone {
+.stepButton:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.stepButtonActive {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.stepButtonComplete {
+  color: var(--accent-strong);
+}
+
+.stepBadge {
   width: 32px;
   height: 32px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--text-inverse);
+  background: #e5e9f0;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 800;
+  flex-shrink: 0;
+}
+
+.stepButtonActive .stepBadge,
+.stepButtonComplete .stepBadge {
+  background: var(--accent);
+  color: var(--text-inverse);
 }
 
 .stepLine {
-  width: 52px;
+  width: 46px;
   height: 2px;
-  background: var(--accent);
+  margin: 0 8px;
+  background: var(--border-strong);
 }
 
 .pageHeader {
@@ -191,6 +229,7 @@
 }
 
 .previewFrame {
+  position: relative;
   width: 100%;
   max-height: 320px;
   overflow: hidden;
@@ -199,11 +238,58 @@
   background: var(--surface-muted);
 }
 
+.removeImageButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: var(--shadow-sm);
+}
+
+.removeImageButton:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent-strong);
+}
+
+.removeImageButton:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 .previewFrame img {
   width: 100%;
   height: 100%;
   max-height: 320px;
   object-fit: contain;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.previewItem {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.previewItem span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .previewMeta {
@@ -221,6 +307,23 @@
 
 .previewMeta strong {
   color: var(--text-primary);
+}
+
+.previewFileList {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.previewFileList li {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .previewActions {
@@ -348,6 +451,145 @@
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.trustPanel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.trustHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.trustHeader strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.trustHeader p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rawToggleButton {
+  min-height: 36px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.rawToggleButton:hover {
+  border-color: var(--accent-border);
+  color: var(--accent-strong);
+}
+
+.warningBox {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  background: #fffbeb;
+}
+
+.warningBox strong {
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.warningBox ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.warningBox li {
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rawTextBox {
+  max-height: 260px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.emptyStepState,
+.stepNotice,
+.nextStepCallout {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.emptyStepState,
+.stepNotice {
+  display: grid;
+  gap: 10px;
+}
+
+.emptyStepState {
+  justify-items: start;
+}
+
+.emptyStepState strong,
+.stepNotice strong,
+.nextStepCallout strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.emptyStepState p,
+.stepNotice p,
+.nextStepCallout p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.nextStepCallout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: var(--surface-soft);
+  border-color: var(--accent-border);
+}
+
+.nextStepCallout div {
+  display: grid;
+  gap: 6px;
 }
 
 .analysisGrid {
@@ -528,6 +770,36 @@
   font-weight: 800;
 }
 
+.reviewBadge {
+  padding: 4px 8px;
+  border: 1px solid #facc15;
+  border-radius: var(--radius-full);
+  background: #fef9c3;
+  color: #854d0e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.evidenceText,
+.reviewEvidenceText,
+.noEvidenceText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.evidenceText {
+  color: var(--accent-strong);
+}
+
+.reviewEvidenceText {
+  color: #92400e;
+}
+
+.noEvidenceText {
+  color: var(--text-muted);
+}
+
 .control {
   width: 100%;
   min-height: 54px;
@@ -655,6 +927,26 @@
   background: rgba(22, 163, 74, 0.12);
 }
 
+.manualTag {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.evidenceTag {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.tagEvidenceDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
 .tagInput {
   min-width: 210px;
   flex: 1 1 210px;
@@ -744,9 +1036,38 @@
   gap: 18px;
 }
 
+.bottomActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 @media (max-width: 760px) {
   .steps {
-    margin-bottom: 42px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 0;
+    margin-bottom: 30px;
+    padding-bottom: 4px;
+    overflow-x: auto;
+  }
+
+  .stepButton {
+    min-height: 42px;
+    padding: 5px 6px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .stepBadge {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+
+  .stepLine {
+    width: 28px;
+    margin: 0 6px;
+    flex-shrink: 0;
   }
 
   .pageHeader {
@@ -763,6 +1084,7 @@
   }
 
   .previewPanel,
+  .previewGrid,
   .analysisGrid {
     grid-template-columns: 1fr;
   }
@@ -777,9 +1099,25 @@
     grid-template-columns: 1fr;
   }
 
+  .trustHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rawToggleButton {
+    width: 100%;
+  }
+
+  .nextStepCallout {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .previewActions,
   .previewActions button,
-  .loadSkillsRow button {
+  .loadSkillsRow button,
+  .bottomActions,
+  .bottomActions button {
     width: 100%;
   }
 
