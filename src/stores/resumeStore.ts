@@ -29,7 +29,7 @@ export const useResumeStore = create<ResumeState>()(
       result: null,
 
       setSelectedRepositories: (repositories) =>
-        set({ selectedRepositories: repositories }),
+        set({ selectedRepositories: repositories, repositoryMatches: [] }),
 
       setRepositoryMatches: (matches) => set({ repositoryMatches: matches }),
 
@@ -38,7 +38,12 @@ export const useResumeStore = create<ResumeState>()(
       setResult: (result) => set({ result }),
 
       clear: () =>
-        set({ selectedRepositories: [], repositoryMatches: [], jobInput: null, result: null }),
+        set({
+          selectedRepositories: [],
+          repositoryMatches: [],
+          jobInput: null,
+          result: null,
+        }),
     }),
     {
       name: 'gitresume-resume',

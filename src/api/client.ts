@@ -109,6 +109,8 @@ interface BackendIntroductionProjectWeight {
   repoName: string;
   mainLang: string;
   score: number;
+  maxScore: number;
+  scorePercent: number;
   matchedKeywords: string[];
   reason: string;
 }
@@ -139,14 +141,6 @@ interface IntroductionGenerateRequestBody {
   keywords: string;
   type: 'RESUME';
   amount: 'SHORT' | 'MEDIUM' | 'LONG';
-  extraDetail: string;
-  jobPostingText: string;
-  projectIds: number[];
-}
-
-interface IntroductionWeightRequestBody {
-  targetJob: string;
-  keywords: string;
   extraDetail: string;
   jobPostingText: string;
   projectIds: number[];
@@ -409,40 +403,28 @@ function createIntroductionRequestBody(
   };
 }
 
-function createWeightRequestBody(
-  payload: ResumeGenerationRequest,
-): IntroductionWeightRequestBody {
-  const generateBody = createIntroductionRequestBody(payload);
-
-  return {
-    targetJob: generateBody.targetJob,
-    keywords: generateBody.keywords,
-    extraDetail: generateBody.extraDetail,
-    jobPostingText: generateBody.jobPostingText,
-    projectIds: generateBody.projectIds,
-  };
-}
-
 function mapBackendProjectToRepositoryMatch(
   project: BackendIntroductionProjectWeight,
   index: number,
 ): RepositoryMatch {
+  const matchedKeywords = project.matchedKeywords ?? [];
+  const reason = project.reason ?? '';
+
   return {
     repositoryId: String(project.projectId),
     repositoryName: project.repoName,
     repositoryUrl: '',
     rank: index + 1,
-    score: Math.round(project.score),
-    matchedKeywords: project.matchedKeywords,
-    jobSignals: project.matchedKeywords.length > 0
-      ? [`매칭 키워드: ${project.matchedKeywords.join(', ')}`]
-      : [],
-    repositorySignals: [
-      project.mainLang && `주요 언어 ${project.mainLang}`,
-      project.reason,
-    ].filter(Boolean),
-    summary: project.reason || `${project.repoName} 기반 경험을 자기소개서에 반영했습니다.`,
-    improvement: '백엔드 가중치 분석 결과를 기준으로 반영했습니다.',
+    score: project.score,
+    maxScore: project.maxScore,
+    scorePercent: project.scorePercent,
+    mainLang: project.mainLang ?? '',
+    matchedKeywords,
+    reason,
+    jobSignals: [],
+    repositorySignals: project.mainLang ? [`주요 언어 ${project.mainLang}`] : [],
+    summary: reason,
+    improvement: '',
   };
 }
 
@@ -666,7 +648,11 @@ export const apiClient = {
     if (MOCK_MODE) {
       await delay(500);
       const result = createMockResumeResult(payload.jobInput, payload.repositoryMatches);
-      return createApiResponse({ jobId: crypto.randomUUID(), result });
+      return createApiResponse({
+        jobId: crypto.randomUUID(),
+        result,
+        repositoryMatches: payload.repositoryMatches,
+      });
     }
 
     const { data, message, code } = await request<BackendIntroductionGenerateResult>(
@@ -681,6 +667,7 @@ export const apiClient = {
       {
         jobId: String(data.requestId),
         result: mapIntroductionResultToResumeResult(payload.jobInput, data),
+        repositoryMatches: (data.weightResult?.projects ?? []).map(mapBackendProjectToRepositoryMatch),
       },
       message,
       code,
@@ -701,30 +688,10 @@ export const apiClient = {
     return createApiResponse(createMockResumeResult(jobInput, repositoryMatches));
   },
 
-  async previewIntroductionWeights(
-    payload: ResumeGenerationRequest,
-  ): Promise<ApiResponse<RepositoryMatch[]>> {
-    if (MOCK_MODE) {
-      await delay(500);
-      return createApiResponse(payload.repositoryMatches ?? []);
-    }
-
-    const { data, message, code } = await request<BackendIntroductionWeightResult>(
-      '/introductions/weights',
-      {
-        method: 'POST',
-        body: JSON.stringify(createWeightRequestBody(payload)),
-      },
-    );
-
-    return createApiResponse(
-      data.projects.map(mapBackendProjectToRepositoryMatch),
-      message,
-      code,
-    );
-  },
-
-  async analyzeJobPostingImages(images: File[]): Promise<ApiResponse<OcrAnalyzeResponse>> {
+  async analyzeJobPostingImages(
+    images: File[],
+    signal?: AbortSignal,
+  ): Promise<ApiResponse<OcrAnalyzeResponse>> {
     if (MOCK_MODE) {
       await delay(700);
       return createApiResponse(createMockOcrAnalyzeResponse());
@@ -743,6 +710,7 @@ export const apiClient = {
     const { data, message, code } = await request<BackendOcrResult>('/introductions/ocr', {
       method: 'POST',
       body: formData,
+      signal,
     });
 
     return createApiResponse(normalizeOcrAnalyzeResponse(data), message, code);

@@ -65,6 +65,7 @@ export interface ResumeGenerationRequest {
 export interface ResumeGenerationResult {
   jobId: string;
   result: ResumeResult;
+  repositoryMatches?: RepositoryMatch[];
 }
 
 export interface ResumeResult {
@@ -80,7 +81,11 @@ export interface RepositoryMatch {
   repositoryUrl: string;
   rank: number;
   score: number;
+  maxScore: number;
+  scorePercent: number;
+  mainLang: string;
   matchedKeywords: string[];
+  reason: string;
   jobSignals: string[];
   repositorySignals: string[];
   summary: string;

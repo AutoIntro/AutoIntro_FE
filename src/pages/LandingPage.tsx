@@ -41,7 +41,7 @@ export default function LandingPage() {
       <div className={`${styles.actions} animate-fade-up animate-fade-up-3`}>
         {isAuthenticated ? (
           <Button size="lg" onClick={() => navigate(ROUTES.REPOSITORIES)}>
-            레포지토리 선택하기
+            GitHub 프로젝트 고르기
             <ArrowRightIcon />
           </Button>
         ) : (
@@ -68,7 +68,7 @@ export default function LandingPage() {
 const FEATURES = [
   {
     title: 'GitHub 분석',
-    description: '레포지토리, 커밋, README를 분석해 실제 기여 경험을 파악합니다.',
+    description: '프로젝트, 커밋, README를 분석해 실제 기여 경험을 파악합니다.',
     icon: <GitHubIcon />,
   },
   {

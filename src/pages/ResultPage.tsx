@@ -21,7 +21,6 @@ export default function ResultPage() {
     result,
     jobInput,
     selectedRepositories,
-    repositoryMatches,
     setResult,
     clear,
   } = useResumeStore();
@@ -41,7 +40,7 @@ export default function ResultPage() {
     return (
       <div className={styles.empty}>
         <h1 className={styles.emptyTitle}>생성된 결과가 없습니다.</h1>
-        <p className={styles.emptyDesc}>레포지토리 선택과 자기소개서 설정을 먼저 진행하세요.</p>
+        <p className={styles.emptyDesc}>GitHub 프로젝트 고르기와 자기소개서 설정을 먼저 진행하세요.</p>
         <Button onClick={() => navigate(ROUTES.REPOSITORIES)}>처음부터 시작하기</Button>
       </div>
     );
@@ -109,10 +108,6 @@ export default function ResultPage() {
     clear();
     navigate(ROUTES.HOME);
   };
-
-  const primaryMatch = repositoryMatches[0];
-  const primaryKeywords =
-    primaryMatch?.matchedKeywords.slice(0, 3).join(', ') || '프로젝트 구현';
 
   return (
     <section className={styles.page}>
@@ -206,7 +201,7 @@ export default function ResultPage() {
             <div className={styles.evidenceHeader}>
               <div>
                 <h2>자기소개서에 사용된 근거</h2>
-                <p>공고 요구사항, 선택한 레포지토리, 매칭 키워드를 기준으로 반영했습니다.</p>
+                <p>공고 요구사항, 선택한 GitHub 프로젝트, 기술 키워드를 기준으로 반영했습니다.</p>
               </div>
               <span>생성 근거</span>
             </div>
@@ -222,70 +217,18 @@ export default function ResultPage() {
               </div>
 
               <div className={styles.evidenceBlock}>
-                <h3>자기소개서 핵심 근거</h3>
-                {result.strengths.length > 0 ? (
-                  <ul className={styles.strengthList}>
-                    {result.strengths.slice(0, 4).map((strength) => (
-                      <li key={strength}>{strength}</li>
+                <h3>본문에 반영된 기술 키워드</h3>
+                {result.techKeywords.length > 0 ? (
+                  <div className={styles.evidenceTags}>
+                    {result.techKeywords.slice(0, 12).map((keyword) => (
+                      <span key={keyword}>{keyword}</span>
                     ))}
-                  </ul>
+                  </div>
                 ) : (
-                  <p>
-                    {primaryMatch?.repositoryName ?? '선택한 레포지토리'}를 중심으로 {primaryKeywords} 경험을 연결했습니다.
-                  </p>
+                  <p>별도로 추출된 기술 키워드가 없습니다.</p>
                 )}
               </div>
             </div>
-
-            {result.techKeywords.length > 0 && (
-              <div className={styles.evidenceBlock}>
-                <h3>본문에 반영된 기술 키워드</h3>
-                <div className={styles.evidenceTags}>
-                  {result.techKeywords.slice(0, 12).map((keyword) => (
-                    <span key={keyword}>{keyword}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {repositoryMatches.length > 0 ? (
-              <div className={styles.repoEvidenceList}>
-                {repositoryMatches.slice(0, 3).map((match) => (
-                  <article key={match.repositoryId} className={styles.repoEvidenceItem}>
-                    <div className={styles.repoEvidenceTop}>
-                      <div>
-                        <span>{match.rank}순위</span>
-                        <h3>{match.repositoryName}</h3>
-                      </div>
-                      <strong>{match.score}점</strong>
-                    </div>
-
-                    <p className={styles.repoEvidenceSummary}>{match.summary}</p>
-
-                    {match.matchedKeywords.length > 0 && (
-                      <div className={styles.evidenceTags}>
-                        {match.matchedKeywords.slice(0, 5).map((keyword) => (
-                          <span key={keyword}>{keyword}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className={styles.signalList}>
-                      {[...match.jobSignals, ...match.repositorySignals].slice(0, 4).map((signal) => (
-                        <p key={signal}>{signal}</p>
-                      ))}
-                    </div>
-
-                    <p className={styles.improvementText}>{match.improvement}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className={styles.evidenceBlock}>
-                <h3>레포지토리 매칭 근거</h3>
-                <p>저장된 레포지토리 매칭 결과가 없습니다. 공고 분석 데이터와 선택한 기술 키워드를 중심으로 초안이 생성되었습니다.</p>
-              </div>
-            )}
           </div>
         )}
       </Card>

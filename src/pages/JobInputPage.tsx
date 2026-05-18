@@ -14,14 +14,13 @@ import Card from '../components/common/Card';
 import { ROUTES } from '../constants/constants';
 import { JOB_POSITION_SUGGESTIONS, type JobPositionSuggestion } from '../constants/jobPositions';
 import { useResumeStore } from '../stores/resumeStore';
-import type { JobInput, OcrAnalyzeResponse, Repository, RepositoryMatch } from '../types/resume';
+import type { JobInput, OcrAnalyzeResponse, Repository } from '../types/resume';
 import {
   mapOcrResultToFormState,
   type OcrFieldEvidence,
   type OcrFieldKey,
   type OcrTagFieldKey,
 } from '../utils/ocrEvidence';
-import { rankRepositoriesForJob } from '../utils/repositoryMatching';
 import styles from './JobInputPage.module.css';
 
 const INITIAL: JobInput = {
@@ -41,12 +40,17 @@ const MAX_POSITION_SUGGESTIONS = 10;
 const POSITION_SUGGESTION_LIST_ID = 'position-suggestions';
 const MAX_JOB_POSTING_IMAGES = 2;
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg'];
-const IMAGE_ANALYSIS_STEPS = [
-  '이미지 업로드 완료',
-  '이미지 내 텍스트 인식 중',
-  '회사명, 직무명 추출 중',
-  '필수 기술 및 우대 사항 분석 중',
-  '입력 폼 자동 채우기 준비 중',
+const OCR_ANALYSIS_TIMEOUT_MS = 120_000;
+const OCR_RESPONSE_FORMAT_ERROR_PATTERNS = [
+  /json/i,
+  /parse/i,
+  /parsing/i,
+  /파싱/,
+  /응답.*형식/,
+  /형식.*응답/,
+  /structured/i,
+  /malformed/i,
+  /unexpected token/i,
 ];
 const CHOSEONG = [
   'ㄱ',
@@ -146,8 +150,9 @@ export default function JobInputPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imagePreviewUrlsRef = useRef<string[]>([]);
+  const isAnalyzingRef = useRef(false);
+  const analysisAbortRef = useRef<AbortController | null>(null);
   const setJobInput = useResumeStore((s) => s.setJobInput);
-  const setRepositoryMatches = useResumeStore((s) => s.setRepositoryMatches);
   const selectedRepositories = useResumeStore((s) => s.selectedRepositories);
 
   const [form, setForm] = useState<JobInput>(INITIAL);
@@ -155,7 +160,6 @@ export default function JobInputPage() {
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisStepIndex, setAnalysisStepIndex] = useState(0);
   const [analysisError, setAnalysisError] = useState('');
   const [hasAnalysisCompleted, setHasAnalysisCompleted] = useState(false);
   const [isPositionFocused, setIsPositionFocused] = useState(false);
@@ -166,16 +170,13 @@ export default function JobInputPage() {
   const [fieldEvidence, setFieldEvidence] = useState<Partial<Record<OcrFieldKey, OcrFieldEvidence>>>({});
   const [tagEvidence, setTagEvidence] =
     useState<Record<OcrTagFieldKey, Record<string, string>>>(EMPTY_TAG_EVIDENCE);
-  const [showRawText, setShowRawText] = useState(false);
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
+  const [showOptionalAnalysisFields, setShowOptionalAnalysisFields] = useState(false);
 
   const ownedTechStack = useMemo(() => parseTags(form.techStack), [form.techStack]);
   const positionSuggestions = useMemo(
     () => getPositionSuggestions(form.position),
     [form.position],
-  );
-  const repositoryMatches = useMemo(
-    () => rankRepositoriesForJob(form, selectedRepositories),
-    [form, selectedRepositories],
   );
   const activePositionSuggestionIndex = Math.min(
     activeSuggestionIndex,
@@ -201,6 +202,8 @@ export default function JobInputPage() {
     ...(hasAnalysisResult ? (['analysis'] as const) : []),
     ...(ownedTechStack.length > 0 ? (['skills'] as const) : []),
   ];
+  const optionalAnalysisFieldCount =
+    form.preferredSkills.length + form.traits.length + form.keywords.length;
 
   useEffect(() => {
     setActiveSuggestionIndex(0);
@@ -212,6 +215,7 @@ export default function JobInputPage() {
 
   useEffect(() => {
     return () => {
+      analysisAbortRef.current?.abort();
       imagePreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
@@ -219,8 +223,8 @@ export default function JobInputPage() {
   if (selectedRepositories.length === 0) {
     return (
       <div className={styles.guard}>
-        <p className={styles.guardMsg}>먼저 레포지토리를 선택해야 합니다.</p>
-        <Button onClick={() => navigate(ROUTES.REPOSITORIES)}>레포지토리 선택하러 가기</Button>
+        <p className={styles.guardMsg}>먼저 자기소개서에 사용할 GitHub 프로젝트를 골라주세요.</p>
+        <Button onClick={() => navigate(ROUTES.REPOSITORIES)}>프로젝트 고르러 가기</Button>
       </div>
     );
   }
@@ -311,14 +315,14 @@ export default function JobInputPage() {
   };
 
   const resetAnalysisStateForImages = (images: File[]) => {
-    setAnalysisStepIndex(0);
     setHasAnalysisCompleted(false);
     setActiveSetupStep('upload');
     setOcrResult(null);
     setOcrWarnings([]);
     setFieldEvidence({});
     setTagEvidence(EMPTY_TAG_EVIDENCE);
-    setShowRawText(false);
+    setShowAnalysisDetails(false);
+    setShowOptionalAnalysisFields(false);
     setForm((prev) => ({
       ...prev,
       jobPostingImageName: images.map((file) => file.name).join(', '),
@@ -401,38 +405,43 @@ export default function JobInputPage() {
   };
 
   const analyzeImage = async () => {
+    if (isAnalyzingRef.current) {
+      return;
+    }
+
     if (postingImages.length === 0) {
       setAnalysisError('채용공고 이미지를 먼저 업로드해 주세요.');
       setActiveSetupStep('upload');
       return;
     }
 
+    isAnalyzingRef.current = true;
+    const analysisController = new AbortController();
+    analysisAbortRef.current = analysisController;
+
     setIsAnalyzing(true);
     setAnalysisError('');
     setHasAnalysisCompleted(false);
 
     try {
-      for (let index = 1; index < IMAGE_ANALYSIS_STEPS.length; index += 1) {
-        setAnalysisStepIndex(index);
-        await wait(index === 1 ? 450 : 560);
-      }
-
-      const { data } = await apiClient.analyzeJobPostingImages(postingImages);
+      const { data } = await analyzeJobPostingImagesWithRetry(
+        postingImages,
+        analysisController,
+      );
       const mappedResult = mapOcrResultToFormState(data);
 
-      setForm((prev) => {
-        const nextOwnedSkills = mergeTags(
-          parseTags(prev.techStack),
-          getRepositorySkillHints(selectedRepositories),
-        );
+      const nextOwnedSkills = mergeTags(
+        parseTags(form.techStack),
+        getRepositorySkillHints(selectedRepositories),
+      );
+      const nextForm = {
+        ...form,
+        ...mappedResult.formPatch,
+        jobPostingImageName: postingImages.map((image) => image.name).join(', '),
+        techStack: formatTags(nextOwnedSkills),
+      };
 
-        return {
-          ...prev,
-          ...mappedResult.formPatch,
-          jobPostingImageName: postingImages.map((image) => image.name).join(', '),
-          techStack: formatTags(nextOwnedSkills),
-        };
-      });
+      setForm(nextForm);
       setOcrResult(data);
       setOcrWarnings(mappedResult.warnings);
       setFieldEvidence(mappedResult.fieldEvidence);
@@ -441,15 +450,18 @@ export default function JobInputPage() {
       setActiveSetupStep('analysis');
     } catch (err) {
       console.error(err);
-      setAnalysisError(err instanceof Error ? err.message : '채용공고 OCR 처리에 실패했습니다.');
+      setAnalysisError(getOcrAnalysisErrorMessage(err));
       setHasAnalysisCompleted(false);
     } finally {
+      isAnalyzingRef.current = false;
+      if (analysisAbortRef.current === analysisController) {
+        analysisAbortRef.current = null;
+      }
       setIsAnalyzing(false);
     }
   };
 
   const handleSubmit = () => {
-    setRepositoryMatches(repositoryMatches);
     setJobInput({
       ...form,
       position: form.position.trim(),
@@ -601,14 +613,15 @@ export default function JobInputPage() {
             </div>
 
             {(postingImages.length > 0 || isAnalyzing || hasAnalysisCompleted) && (
-              <ImageAnalysisStatus
-                activeIndex={analysisStepIndex}
+              <ImageAnalysisNotice
+                imageCount={postingImages.length}
                 isAnalyzing={isAnalyzing}
                 isComplete={hasAnalysisCompleted}
+                error={analysisError}
               />
             )}
 
-            {analysisError && <p className={styles.errorText}>{analysisError}</p>}
+            {analysisError && !postingImages.length && <p className={styles.errorText}>{analysisError}</p>}
           </div>
         )}
 
@@ -616,8 +629,8 @@ export default function JobInputPage() {
           <div className={styles.section}>
             <SectionHeader
               number="2"
-              title="자동분석 결과"
-              description="이미지 분석이 완료되면 아래 항목이 자동으로 입력됩니다. 필요하면 직접 수정할 수 있습니다."
+              title="공고 내용 확인"
+              description="AI가 채운 내용을 확인해주세요. 틀린 부분만 고치면 됩니다."
             />
 
             {!ocrResult && !hasAnalysisResult ? (
@@ -630,11 +643,14 @@ export default function JobInputPage() {
               </div>
             ) : (
               <>
-                <AnalysisTrustPanel
+                <AnalysisReviewPanel
                   rawText={ocrResult?.rawText ?? form.jobPostingText ?? ''}
                   warnings={ocrWarnings}
-                  showRawText={showRawText}
-                  onToggleRawText={() => setShowRawText((current) => !current)}
+                  companyName={form.companyName}
+                  position={form.position}
+                  requiredSkillsCount={form.requiredSkills.length}
+                  showDetails={showAnalysisDetails}
+                  onToggleDetails={() => setShowAnalysisDetails((current) => !current)}
                 />
 
                 <div className={styles.analysisGrid}>
@@ -705,7 +721,6 @@ export default function JobInputPage() {
                         ))}
                       </ul>
                     )}
-                    <FieldEvidenceNote evidence={fieldEvidence.position} />
                   </div>
 
                   <div className={styles.wideField}>
@@ -729,33 +744,53 @@ export default function JobInputPage() {
                     evidenceByValue={tagEvidence.requiredSkills}
                     onChange={(values) => updateTagField('requiredSkills', values)}
                   />
-
-                  <TagEditor
-                    label="우대 기술"
-                    values={form.preferredSkills}
-                    placeholder="예: Docker, Kubernetes, CI/CD"
-                    evidenceByValue={tagEvidence.preferredSkills}
-                    onChange={(values) => updateTagField('preferredSkills', values)}
-                  />
-
-                  <TagEditor
-                    label="인재상 / 자격요건"
-                    values={form.traits}
-                    placeholder="예: 협업 능력, 문제 해결 능력"
-                    evidenceByValue={tagEvidence.traits}
-                    onChange={(values) => updateTagField('traits', values)}
-                  />
-
-                  <TagEditor
-                    label="핵심 키워드"
-                    values={form.keywords}
-                    placeholder="예: 백엔드, API, 클라우드"
-                    evidenceByValue={tagEvidence.keywords}
-                    onChange={(values) => updateTagField('keywords', values)}
-                  />
                 </div>
 
-                <RepositoryRankingPanel matches={repositoryMatches} />
+                <div className={styles.optionalFieldsPanel}>
+                  <div className={styles.optionalFieldsHeader}>
+                    <div>
+                      <strong>추가로 반영된 항목</strong>
+                      <p>
+                        우대 기술 {form.preferredSkills.length}개 · 인재상 {form.traits.length}개 · 키워드 {form.keywords.length}개
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.optionalToggleButton}
+                      onClick={() => setShowOptionalAnalysisFields((current) => !current)}
+                    >
+                      {showOptionalAnalysisFields ? '접기' : optionalAnalysisFieldCount > 0 ? '확인 / 수정' : '직접 추가'}
+                    </button>
+                  </div>
+
+                  {showOptionalAnalysisFields && (
+                    <div className={styles.optionalFieldsContent}>
+                      <TagEditor
+                        label="우대 기술"
+                        values={form.preferredSkills}
+                        placeholder="예: Docker, Kubernetes, CI/CD"
+                        evidenceByValue={tagEvidence.preferredSkills}
+                        onChange={(values) => updateTagField('preferredSkills', values)}
+                      />
+
+                      <TagEditor
+                        label="인재상 / 자격요건"
+                        values={form.traits}
+                        placeholder="예: 협업 능력, 문제 해결 능력"
+                        evidenceByValue={tagEvidence.traits}
+                        onChange={(values) => updateTagField('traits', values)}
+                      />
+
+                      <TagEditor
+                        label="핵심 키워드"
+                        values={form.keywords}
+                        placeholder="예: 백엔드, API, 클라우드"
+                        evidenceByValue={tagEvidence.keywords}
+                        onChange={(values) => updateTagField('keywords', values)}
+                      />
+                    </div>
+                  )}
+                </div>
 
                 <div className={styles.nextStepCallout}>
                   <div>
@@ -783,7 +818,7 @@ export default function JobInputPage() {
 
             <div className={styles.stepNotice}>
               <strong>마지막 단계입니다.</strong>
-              <p>자동분석 결과에서 뽑힌 필수 기술과 선택한 GitHub 레포의 기술을 함께 확인한 뒤 생성하면 됩니다.</p>
+              <p>자동분석 결과에서 뽑힌 필수 기술과 선택한 GitHub 프로젝트의 기술을 함께 확인한 뒤 생성하면 됩니다.</p>
             </div>
 
             <div className={styles.loadSkillsRow}>
@@ -893,159 +928,194 @@ function TextInputField({
         value={value}
         onChange={onChange}
       />
-      <FieldEvidenceNote evidence={evidence} />
     </div>
   );
 }
 
-function FieldEvidenceNote({ evidence }: { evidence?: OcrFieldEvidence }) {
-  if (!evidence) {
-    return <p className={styles.noEvidenceText}>근거 없음: 자동 입력되지 않았거나 사용자가 직접 입력한 값입니다.</p>;
-  }
-
-  return (
-    <p className={evidence.requiresReview ? styles.reviewEvidenceText : styles.evidenceText}>
-      근거: {evidence.evidence}
-      {typeof evidence.confidence === 'number' && ` · confidence ${Math.round(evidence.confidence * 100)}%`}
-    </p>
-  );
-}
-
-function AnalysisTrustPanel({
+function AnalysisReviewPanel({
   rawText,
   warnings,
-  showRawText,
-  onToggleRawText,
+  companyName,
+  position,
+  requiredSkillsCount,
+  showDetails,
+  onToggleDetails,
 }: {
   rawText: string;
   warnings: string[];
-  showRawText: boolean;
-  onToggleRawText: () => void;
+  companyName: string;
+  position: string;
+  requiredSkillsCount: number;
+  showDetails: boolean;
+  onToggleDetails: () => void;
 }) {
   return (
-    <div className={styles.trustPanel}>
-      <div className={styles.trustHeader}>
+    <div className={styles.reviewPanel}>
+      <div className={styles.reviewHeader}>
         <div>
-          <strong>근거가 확인된 항목만 자동 입력됩니다.</strong>
-          <p>이미지 분석 결과는 자동 입력값입니다. 제출 전 반드시 확인해주세요.</p>
+          <strong>확인할 내용만 추렸습니다.</strong>
+          <p>회사명, 직무, 주요 업무, 필수 기술만 먼저 확인하면 다음 단계로 갈 수 있습니다.</p>
         </div>
-        <button type="button" className={styles.rawToggleButton} onClick={onToggleRawText}>
-          {showRawText ? '원문 접기' : 'OCR 원문 보기'}
+        <button type="button" className={styles.detailsToggleButton} onClick={onToggleDetails}>
+          {showDetails ? '세부 정보 접기' : '세부 정보 보기'}
         </button>
       </div>
 
-      {warnings.length > 0 && (
-        <div className={styles.warningBox}>
-          <strong>확인 필요</strong>
-          <ul>
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {showRawText && (
-        <pre className={styles.rawTextBox}>{rawText || 'OCR 원문이 없습니다.'}</pre>
-      )}
-    </div>
-  );
-}
-
-function RepositoryRankingPanel({ matches }: { matches: RepositoryMatch[] }) {
-  return (
-    <div className={styles.rankingPanel}>
-      <div className={styles.rankingHeader}>
-        <div>
-          <h3>공고 맞춤 레포 우선순위</h3>
-          <p>선택한 후보 레포를 공고 요구사항 기준으로 자동 정렬했습니다.</p>
-        </div>
-        <span className={styles.rankingMeta}>상위 레포 중심 반영</span>
+      <div className={styles.reviewSummaryRow}>
+        <span>{companyName || '회사명 확인 필요'}</span>
+        <span>{position || '직무 확인 필요'}</span>
+        <span>필수 기술 {requiredSkillsCount}개</span>
+        {warnings.length > 0 && <span className={styles.warningSummary}>{warnings.length}개 확인 필요</span>}
       </div>
 
-      <ol className={styles.rankingList}>
-        {matches.map((match) => (
-          <li key={match.repositoryId} className={styles.rankingItem}>
-            <div className={styles.rankBadge}>{match.rank}</div>
-            <div className={styles.rankingContent}>
-              <div className={styles.rankingTitleRow}>
-                <h4>{match.repositoryName}</h4>
-                <span>{match.score}점</span>
-              </div>
-              <p className={styles.rankingSummary}>{match.summary}</p>
-
-              {match.matchedKeywords.length > 0 && (
-                <div className={styles.keywordRow}>
-                  {match.matchedKeywords.slice(0, 5).map((keyword) => (
-                    <span key={keyword}>{keyword}</span>
-                  ))}
-                </div>
-              )}
-
-              <div className={styles.rankingEvidence}>
-                {match.jobSignals.slice(0, 2).map((signal) => (
-                  <p key={signal}>
-                    <strong>공고</strong>
-                    {signal}
-                  </p>
+      {showDetails && (
+        <div className={styles.analysisDetails}>
+          {warnings.length > 0 && (
+            <div className={styles.warningBox}>
+              <strong>확인 필요</strong>
+              <ul>
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
                 ))}
-                {match.repositorySignals.slice(0, 2).map((signal) => (
-                  <p key={signal}>
-                    <strong>GitHub</strong>
-                    {signal}
-                  </p>
-                ))}
-              </div>
+              </ul>
             </div>
-          </li>
-        ))}
-      </ol>
+          )}
+
+          <div className={styles.rawTextSection}>
+            <strong>OCR 원문</strong>
+            <pre className={styles.rawTextBox}>{rawText || 'OCR 원문이 없습니다.'}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ImageAnalysisStatus({
-  activeIndex,
+async function analyzeJobPostingImagesWithRetry(
+  images: File[],
+  controller: AbortController,
+) {
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, OCR_ANALYSIS_TIMEOUT_MS);
+
+  try {
+    try {
+      return await apiClient.analyzeJobPostingImages(images, controller.signal);
+    } catch (error) {
+      if (timedOut && isAbortError(error)) {
+        throw new Error('OCR_ANALYSIS_TIMEOUT');
+      }
+
+      if (controller.signal.aborted || !isOcrResponseFormatError(error)) {
+        throw error;
+      }
+
+      console.warn('OCR analysis response format error. Retrying once.', error);
+      return await apiClient.analyzeJobPostingImages(images, controller.signal);
+    }
+  } catch (error) {
+    if (timedOut && isAbortError(error)) {
+      throw new Error('OCR_ANALYSIS_TIMEOUT');
+    }
+
+    if (!isOcrResponseFormatError(error)) {
+      throw error;
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function getOcrAnalysisErrorMessage(error: unknown) {
+  if (isOcrAnalysisTimeoutError(error)) {
+    return '이미지 분석 시간이 오래 걸려 중단했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (isOcrResponseFormatError(error)) {
+    return '이미지 분석 결과를 정리하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (isServerError(error)) {
+    return '이미지 분석 서버에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  return error instanceof Error && error.message
+    ? error.message
+    : '채용공고 이미지 분석에 실패했습니다. 다시 시도해 주세요.';
+}
+
+function isOcrResponseFormatError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+
+  return OCR_RESPONSE_FORMAT_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+function isOcrAnalysisTimeoutError(error: unknown) {
+  return error instanceof Error && error.message === 'OCR_ANALYSIS_TIMEOUT';
+}
+
+function isServerError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    typeof error.status === 'number' &&
+    error.status >= 500
+  );
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function ImageAnalysisNotice({
+  imageCount,
   isAnalyzing,
   isComplete,
+  error,
 }: {
-  activeIndex: number;
+  imageCount: number;
   isAnalyzing: boolean;
   isComplete: boolean;
+  error: string;
 }) {
-  const message = isComplete
-    ? '이미지 분석이 완료되었습니다. 자동 입력된 내용을 확인하고 필요한 경우 수정해주세요.'
+  const hasError = error.trim() !== '';
+  const title = hasError
+    ? '이미지 분석에 실패했습니다'
+    : isComplete
+    ? '분석이 완료되었습니다'
     : isAnalyzing
-      ? 'AI가 채용공고 이미지의 텍스트를 순서대로 읽고 있습니다.'
-      : '이미지가 업로드되었습니다. 공고 이미지 분석 버튼을 눌러주세요.';
+      ? '이미지를 분석하고 있습니다'
+      : '분석 준비가 끝났습니다';
+  const message = hasError
+    ? error
+    : isComplete
+    ? '자동 입력된 항목을 확인하고, 필요하면 직접 수정해주세요.'
+    : isAnalyzing
+      ? '완료되면 자동분석 결과 화면으로 이동합니다. 잠시만 기다려 주세요.'
+      : `${imageCount}장의 이미지를 업로드했습니다. 공고 이미지 분석 버튼을 누르면 회사명, 직무, 주요 업무, 기술 키워드를 자동으로 채웁니다.`;
 
   return (
-    <div className={styles.visionStatus} role="status" aria-live="polite">
-      <div className={styles.visionStatusHeader}>
-        <h3>이미지 분석 진행 상태</h3>
-        {isAnalyzing && <span className={styles.statusSpinner} aria-hidden="true" />}
+    <div
+      className={[
+        styles.analysisNotice,
+        isAnalyzing ? styles.analysisNoticeBusy : '',
+        isComplete ? styles.analysisNoticeComplete : '',
+        hasError ? styles.analysisNoticeError : '',
+      ].join(' ')}
+      role="status"
+      aria-live="polite"
+    >
+      <div className={styles.analysisNoticeHeader}>
+        <h3>{title}</h3>
+        {isAnalyzing && <span className={styles.analysisSpinner} aria-hidden="true" />}
       </div>
       <p>{message}</p>
-      <ol className={styles.visionStepList}>
-        {IMAGE_ANALYSIS_STEPS.map((step, index) => {
-          const isActive = isAnalyzing && index === activeIndex;
-          const isDone = isComplete || index < activeIndex || (!isAnalyzing && index === 0);
-
-          return (
-            <li
-              key={step}
-              className={[
-                styles.visionStep,
-                isDone ? styles.visionDone : '',
-                isActive ? styles.visionActive : '',
-              ].join(' ')}
-            >
-              <span>{isDone ? <CheckIcon /> : index + 1}</span>
-              {step}
-            </li>
-          );
-        })}
-      </ol>
     </div>
   );
 }
@@ -1183,14 +1253,6 @@ function ImageIcon() {
       <path d="M4 5h16v14H4V5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="m4 16 4.5-4.5 3.5 3.5 2-2L20 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M15.5 9.5h.01" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m5 12 4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -1342,8 +1404,3 @@ function getPositionSuggestionOptionId(index: number) {
   return `position-suggestion-${index}`;
 }
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}

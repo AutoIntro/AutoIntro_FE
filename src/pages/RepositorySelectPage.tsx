@@ -82,7 +82,7 @@ export default function RepositorySelectPage() {
   if (status === 'loading') {
     return (
       <div className={styles.center}>
-        <LoadingSpinner message="GitHub 레포지토리를 불러오는 중입니다..." size="lg" />
+        <LoadingSpinner message="GitHub 프로젝트를 불러오는 중입니다..." size="lg" />
       </div>
     );
   }
@@ -90,7 +90,7 @@ export default function RepositorySelectPage() {
   if (status === 'error') {
     return (
       <div className={styles.center}>
-        <p className={styles.errorTitle}>레포지토리를 불러오지 못했습니다.</p>
+        <p className={styles.errorTitle}>GitHub 프로젝트 목록을 불러오지 못했습니다.</p>
         <p className={styles.errorSub}>백엔드 서버 상태를 확인하거나 잠시 후 다시 시도하세요.</p>
         <Button onClick={() => window.location.reload()}>다시 시도</Button>
       </div>
@@ -116,9 +116,9 @@ export default function RepositorySelectPage() {
       </Card>
 
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>후보 레포지토리 선택</h1>
+        <h1 className={styles.pageTitle}>자기소개서에 사용할 프로젝트 고르기</h1>
         <p className={styles.pageDesc}>
-          공고 분석 후 자동 정렬할 GitHub 후보 레포를 선택해주세요. 최대 {MAX_REPOSITORIES}개까지 선택할 수 있습니다.
+          내 경험을 보여줄 GitHub 프로젝트를 최대 {MAX_REPOSITORIES}개까지 골라주세요. 공고와 잘 맞는 순서로 자동 정리해 드립니다.
         </p>
       </div>
 
@@ -202,7 +202,7 @@ function StepHeader({ current }: { current: 1 | 2 }) {
         <span className={current > 1 ? styles.stepDone : styles.stepActive}>
           {current > 1 ? <CheckIcon /> : '1'}
         </span>
-        <span>후보 레포 선택</span>
+        <span>프로젝트 고르기</span>
       </div>
       <span className={styles.stepLine} />
       <div className={styles.step}>
